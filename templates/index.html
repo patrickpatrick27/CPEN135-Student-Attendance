@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32-CAM Attendance</title>
+    <style>
+        body { font-family: Arial; text-align:center; background:#f4f4f4; }
+        img { border:2px solid #333; width:480px; }
+        button { padding:12px; margin:10px; font-size:16px; }
+    </style>
+</head>
+<body>
+
+<h1>ESP32-CAM Facial Attendance</h1>
+
+<img src="/stream" id="cam">
+
+<br>
+
+<button onclick="enroll()">Enroll Student</button>
+<button onclick="attendance()">Take Attendance</button>
+
+<h2>Recent Attendance</h2>
+<ul id="list"></ul>
+
+<script>
+async function enroll() {
+    const name = prompt("Student name:");
+    if (!name) return;
+    try {
+        const res = await fetch(`/capture_enroll?name=${name}`);
+        const data = await res.json();
+        alert(JSON.stringify(data));
+        refresh();
+    } catch(e) {
+        alert("Error: " + e);
+    }
+}
+
+async function attendance() {
+    try {
+        const res = await fetch(`/capture_attendance`);
+        const data = await res.json();
+        alert(JSON.stringify(data));
+        refresh();
+    } catch(e) {
+        alert("Error: " + e);
+    }
+}
+
+async function refresh() {
+    const res = await fetch(`/attendance`);
+    const data = await res.json();
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    data.forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = `${r[0]} — ${r[1]}`;
+        list.appendChild(li);
+    });
+}
+
+setInterval(refresh, 3000);
+</script>
+
+</body>
+</html>
