@@ -1,0 +1,68 @@
+<!-- templates/class.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Class Attendance</title>
+    <style>
+        body { font-family: Arial; text-align: center; background: #f4f4f4; }
+        img { border: 2px solid #333; width: 480px; }
+        button { padding: 12px; margin: 10px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Class Attendance</h1>
+    <img src="/stream" id="cam">
+    <br>
+    <button onclick="enroll({{ class_id }})">Enroll Student</button>
+    <button onclick="attendance({{ class_id }})">Take Attendance</button>
+    <h2>Students</h2>
+    <ul>
+        {% for student in students %}
+            <li>{{ student[1] }} ({{ student[0] }})</li>
+        {% endfor %}
+    </ul>
+    <h2>Recent Attendance</h2>
+    <ul id="list"></ul>
+    <a href="/dashboard">Back to Dashboard</a>
+
+    <script>
+    async function enroll(classId) {
+        const name = prompt("Student name:");
+        if (!name) return;
+        try {
+            const res = await fetch(`/capture_enroll/${classId}?name=${name}`);
+            const data = await res.json();
+            alert(JSON.stringify(data));
+            location.reload();  // Reload to update student list
+        } catch(e) {
+            alert("Error: " + e);
+        }
+    }
+
+    async function attendance(classId) {
+        try {
+            const res = await fetch(`/capture_attendance/${classId}`);
+            const data = await res.json();
+            alert(JSON.stringify(data));
+            refresh(classId);
+        } catch(e) {
+            alert("Error: " + e);
+        }
+    }
+
+    async function refresh(classId) {
+        const res = await fetch(`/attendance/${classId}`);
+        const data = await res.json();
+        const list = document.getElementById("list");
+        list.innerHTML = "";
+        data.forEach(r => {
+            const li = document.createElement("li");
+            li.textContent = `${r[0]} — ${r[1]} (${r[2]})`;
+            list.appendChild(li);
+        });
+    }
+
+    setInterval(() => refresh({{ class_id }}), 3000);
+    </script>
+</body>
+</html>

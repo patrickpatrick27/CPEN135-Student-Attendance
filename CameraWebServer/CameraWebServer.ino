@@ -1,14 +1,9 @@
 #include "esp_camera.h"
 #include <WiFi.h>
+#include <WiFiManager.h>  // Add this library: https://github.com/tzapu/WiFiManager
 
 #define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
-
-// ===================
-// WiFi Credentials
-// ===================
-const char* ssid = "Living-Room-WiFi";
-const char* password = "BulasoFam27&";
 
 // ===================
 // Disable brownout detector
@@ -71,16 +66,17 @@ void setup() {
   s->set_brightness(s, 1);
   s->set_saturation(s, -1);
 
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  // WiFi Manager for dynamic SSID/Password
+  WiFiManager wm;
+  bool res = wm.autoConnect("ESP32Config");  // AP name for config mode
+  if (!res) {
+    Serial.println("Failed to connect");
+    ESP.restart();
+  } else {
+    Serial.println("WiFi connected");
+    Serial.print("ESP32-CAM IP: ");
+    Serial.println(WiFi.localIP());
   }
-
-  Serial.println("\nWiFi connected");
-  Serial.print("ESP32-CAM IP: ");
-  Serial.println(WiFi.localIP());
 
   startCameraServer();
 
