@@ -1,0 +1,122 @@
+<!-- templates/dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body { font-family: Arial; background: #f4f4f4; margin: 0; padding: 20px; }
+        .main { display: flex; }
+        .left { width: 30%; padding: 20px; border-right: 1px solid #ccc; }
+        .right { width: 70%; padding: 20px; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 10px 0; }
+        a { text-decoration: none; color: #333; }
+        form label { display: block; margin-top: 10px; }
+        input, select { padding: 10px; margin: 5px 0; width: 200px; } /* Consistent width */
+        button { padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 20px; }
+        img { border: 2px solid #333; width: 480px; }
+        .students { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .student { padding: 10px; border-radius: 10px; color: white; }
+        .on_time { background: green; }
+        .late { background: yellow; color: black; }
+        .absent { background: red; }
+    </style>
+</head>
+<body>
+    <h1>Welcome, {{ username }} - Dashboard</h1>
+    <div class="main">
+        <div class="left">
+            <h2>Add New Class</h2>
+            <form method="POST">
+                <label for="name">Subject Name:</label>
+                <input type="text" id="name" name="name" required><br>
+                <label for="day">Day:</label>
+                <select id="day" name="day" required>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                </select><br>
+                <label for="start_time">Start Time:</label>
+                <input type="time" id="start_time" name="start_time" required><br>
+                <label for="end_time">End Time:</label>
+                <input type="time" id="end_time" name="end_time" required><br>
+                <button type="submit">Add Class</button>
+            </form>
+            <h2>Your Classes</h2>
+            <ul>
+                {% for cls in all_classes %}
+                    <li><a href="/dashboard?class_id={{ cls[0] }}">{{ cls[1] }} on {{ cls[2] }} ({{ cls[3] }} - {{ cls[4] }})</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="right">
+            {% if selected_class %}
+                <h2>{{ selected_class.name }} ({{ selected_class.start_time }} - {{ selected_class.end_time }})</h2>
+                <img src="/stream" id="cam">
+                <br>
+                <button onclick="enroll({{ selected_class.id }})">Enroll Student</button>
+                <button onclick="attendance({{ selected_class.id }})">Take Attendance</button>
+                <h3>Students</h3>
+                <div class="students">
+                    {% for sid, info in students_statuses.items() %}
+                        <div class="student {{ info.status }}">{{ info.name }} ({{ sid }}) - {{ info.status | capitalize }}</div>
+                    {% endfor %}
+                </div>
+                <h3>Recent Attendance</h3>
+                <ul id="list"></ul>
+            {% else %}
+                <p>Select a class from the left to view details.</p>
+            {% endif %}
+        </div>
+    </div>
+    <a href="/logout">Logout</a>
+
+    <script>
+    async function enroll(classId) {
+        const name = prompt("Student name:");
+        if (!name) return;
+        try {
+            const res = await fetch(`/capture_enroll?class_id=${classId}&name=${name}`);
+            const data = await res.json();
+            alert(JSON.stringify(data));
+            location.reload();
+        } catch(e) {
+            alert("Error: " + e);
+        }
+    }
+
+    async function attendance(classId) {
+        try {
+            const res = await fetch(`/capture_attendance?class_id=${classId}`);
+            const data = await res.json();
+            alert(JSON.stringify(data));
+            refresh(classId);
+            location.reload();  // Reload to update statuses
+        } catch(e) {
+            alert("Error: " + e);
+        }
+    }
+
+    async function refresh(classId) {
+        if (!classId) return;
+        const res = await fetch(`/attendance?class_id=${classId}`);
+        const data = await res.json();
+        const list = document.getElementById("list");
+        list.innerHTML = "";
+        data.forEach(r => {
+            const li = document.createElement("li");
+            li.textContent = `${r[0]} — ${r[1]} (${r[2]})`;
+            list.appendChild(li);
+        });
+    }
+
+    {% if selected_class %}
+    setInterval(() => refresh({{ selected_class.id }}), 3000);
+    {% endif %}
+    </script>
+</body>
+</html>
