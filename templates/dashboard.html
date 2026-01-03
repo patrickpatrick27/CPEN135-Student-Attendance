@@ -4,83 +4,685 @@
 <head>
     <title>Dashboard</title>
     <style>
-        body { font-family: Arial; background: #f4f4f4; margin: 0; padding: 20px; }
-        .main { display: flex; }
-        .left { width: 30%; padding: 20px; border-right: 1px solid #ccc; }
-        .right { width: 70%; padding: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; color: #333; }
+        h1, h2, h3 { color: #2c3e50; }
+        .main { display: flex; gap: 20px; }
+        .left { width: 30%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .right { width: 70%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         ul { list-style: none; padding: 0; }
-        li { margin: 10px 0; }
-        a { text-decoration: none; color: #333; }
-        form label { display: block; margin-top: 10px; }
-        input, select { padding: 10px; margin: 5px 0; width: 200px; } /* Consistent width */
-        button { padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 20px; }
-        img { border: 2px solid #333; width: 480px; }
+        li { margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 5px; display: flex; align-items: center; justify-content: space-between; }
+        a { text-decoration: none; color: #007bff; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        img { border: 2px solid #dee2e6; width: 480px; border-radius: 10px; }
         .students { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .student { padding: 10px; border-radius: 10px; color: white; }
-        .on_time { background: green; }
-        .late { background: yellow; color: black; }
-        .absent { background: red; }
+        .student { padding: 10px; border-radius: 5px; color: white; display: flex; justify-content: space-between; align-items: center; }
+        .on_time { background: #28a745; }
+        .late { background: #ffc107; color: black; }
+        .absent { background: #dc3545; }
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; background: rgba(0,0,0,0.4); }
+        .modal-content { background: white; margin: 10% auto; padding: 20px; border-radius: 10px; width: 500px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: black; }
+        label { display: block; margin: 10px 0 5px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 5px; box-sizing: border-box; margin-bottom: 10px; }
+        .add-btns { display: flex; gap: 10px; margin-bottom: 20px; }
+        .add-class-btn, .enroll-student-btn { display: flex; align-items: center; gap: 10px; }
+        .calendar { margin: 20px 0; }
+        #allStudentsList { max-height: 300px; overflow-y: auto; }
+        .icon-btn { background: #007bff; color: white; border: none; cursor: pointer; font-size: 12px; padding: 5px 10px; border-radius: 5px; margin-left: 5px; }
+        .icon-btn:hover { background: #0056b3; }
+        .action-buttons { display: flex; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border: 1px solid #dee2e6; text-align: left; }
+        .capture-btn { margin-top: 10px; }
+        #captureFace { display: none; }
+        .form-row { display: flex; gap: 10px; }
+        .form-row > div { flex: 1; }
+        .checkbox-label { display: flex; align-items: center; gap: 10px; }
+        .logout-btn { background: red; color: white; padding: 10px; border-radius: 5px; text-decoration: none; display: inline-block; margin-top: 20px; }
     </style>
 </head>
 <body>
     <h1>Welcome, {{ username }} - Dashboard</h1>
     <div class="main">
         <div class="left">
-            <h2>Add New Class</h2>
-            <form method="POST">
-                <label for="name">Subject Name:</label>
-                <input type="text" id="name" name="name" required><br>
-                <label for="day">Day:</label>
-                <select id="day" name="day" required>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                    <option value="Sunday">Sunday</option>
-                </select><br>
-                <label for="start_time">Start Time:</label>
-                <input type="time" id="start_time" name="start_time" required><br>
-                <label for="end_time">End Time:</label>
-                <input type="time" id="end_time" name="end_time" required><br>
-                <button type="submit">Add Class</button>
-            </form>
+            <div class="add-btns">
+                <button class="add-class-btn" onclick="showAddClassModal()"><span style="font-size: 20px;">+</span> Add New Class</button>
+                <button class="enroll-student-btn" onclick="showEnrollGlobalModal()"><span style="font-size: 20px;">+</span> Enroll New Student</button>
+            </div>
+            <div id="addClassModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeAddClassModal()">&times;</span>
+                    <h2>Add New Class</h2>
+                    <form id="addClassForm">
+                        <label for="name">Subject Name:</label>
+                        <input type="text" id="name" name="name" required>
+                        <label for="day">Day:</label>
+                        <select id="day" name="day" required>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                        </select>
+                        <div class="form-row">
+                            <div>
+                                <label for="start_time">Start Time:</label>
+                                <input type="time" id="start_time" name="start_time" required>
+                            </div>
+                            <div>
+                                <label for="end_time">End Time:</label>
+                                <input type="time" id="end_time" name="end_time" required>
+                            </div>
+                        </div>
+                        <button type="button" onclick="submitAddClass()">Submit</button>
+                    </form>
+                </div>
+            </div>
+            <div id="editClassModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeEditClassModal()">&times;</span>
+                    <h2>Edit Class</h2>
+                    <form id="editClassForm">
+                        <input type="hidden" id="edit_class_id">
+                        <label for="edit_name">Subject Name:</label>
+                        <input type="text" id="edit_name" required>
+                        <label for="edit_day">Day:</label>
+                        <select id="edit_day" required>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                        </select>
+                        <div class="form-row">
+                            <div>
+                                <label for="edit_start_time">Start Time:</label>
+                                <input type="time" id="edit_start_time" required>
+                            </div>
+                            <div>
+                                <label for="edit_end_time">End Time:</label>
+                                <input type="time" id="edit_end_time" required>
+                            </div>
+                        </div>
+                        <button type="button" onclick="submitEditClass()">Submit</button>
+                    </form>
+                </div>
+            </div>
+            <div id="deleteClassModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeDeleteClassModal()">&times;</span>
+                    <h2>Delete Class</h2>
+                    <form id="deleteClassForm">
+                        <input type="hidden" id="delete_class_id">
+                        <label for="delete_username">Username:</label>
+                        <input type="text" id="delete_username" required>
+                        <label for="delete_password">Password:</label>
+                        <input type="password" id="delete_password" required>
+                        <button type="button" onclick="submitDeleteClass()">Confirm Delete</button>
+                    </form>
+                </div>
+            </div>
+            <div id="enrollGlobalModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeEnrollGlobalModal()">&times;</span>
+                    <h2>Enroll Student</h2>
+                    <form id="enrollGlobalForm">
+                        <div class="form-row">
+                            <div>
+                                <label for="last_name">Last Name:</label>
+                                <input type="text" id="last_name" name="last_name" required>
+                            </div>
+                            <div>
+                                <label for="first_name">First Name:</label>
+                                <input type="text" id="first_name" name="first_name" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div>
+                                <label for="middle_name">Middle Name:</label>
+                                <input type="text" id="middle_name" name="middle_name">
+                            </div>
+                            <div>
+                                <label for="student_number">Student Number:</label>
+                                <input type="text" id="student_number" name="student_number" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div>
+                                <label for="suffix">Suffix:</label>
+                                <select id="suffix" name="suffix">
+                                    <option value="">None</option>
+                                    <option value="Jr.">Jr.</option>
+                                    <option value="Sr.">Sr.</option>
+                                    <option value="II">II</option>
+                                    <option value="III">III</option>
+                                    <option value="IV">IV</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="year">Year:</label>
+                                <select id="year" name="year" required>
+                                    <option value="1st">1st</option>
+                                    <option value="2nd">2nd</option>
+                                    <option value="3rd">3rd</option>
+                                    <option value="4th">4th</option>
+                                    <option value="5th">5th</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div>
+                                <label for="program">Program:</label>
+                                <input type="text" id="program" name="program" maxlength="10" oninput="this.value = this.value.toUpperCase()" required>
+                            </div>
+                            <div class="checkbox-label">
+                                <label for="section">Section:</label>
+                                <input type="text" id="section" name="section" required>
+                                <label><input type="checkbox" id="irregular"> Irregular</label>
+                            </div>
+                        </div>
+                        <button type="button" onclick="submitEnrollGlobal()">Submit</button>
+                    </form>
+                </div>
+            </div>
+            <button onclick="showAllStudentsModal()">View All Students</button>
+            <div id="allStudentsModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeAllStudentsModal()">&times;</span>
+                    <h2>All Students</h2>
+                    <label for="allYear">Year:</label>
+                    <input type="text" id="allYear" oninput="filterAllStudents()">
+                    <label for="allProgram">Program:</label>
+                    <input type="text" id="allProgram" oninput="filterAllStudents()">
+                    <label for="allSection">Section:</label>
+                    <input type="text" id="allSection" oninput="filterAllStudents()">
+                    <table id="allStudentsTable">
+                        <thead>
+                            <tr>
+                                <th>First Name</th>
+                                <th>Last Name</th>
+                                <th>Year</th>
+                                <th>Program</th>
+                                <th>Section</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="pagination">
+                        <button onclick="changePage(-1)">Previous</button>
+                        <span id="pageInfo"></span>
+                        <button onclick="changePage(1)">Next</button>
+                    </div>
+                </div>
+            </div>
+            <div id="editStudentModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeEditStudentModal()">&times;</span>
+                    <h2>Edit Student</h2>
+                    <form id="editStudentForm">
+                        <input type="hidden" id="edit_student_number">
+                        <div class="form-row">
+                            <div>
+                                <label for="edit_last_name">Last Name:</label>
+                                <input type="text" id="edit_last_name" required>
+                            </div>
+                            <div>
+                                <label for="edit_first_name">First Name:</label>
+                                <input type="text" id="edit_first_name" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div>
+                                <label for="edit_middle_name">Middle Name:</label>
+                                <input type="text" id="edit_middle_name">
+                            </div>
+                            <div>
+                                <label for="edit_student_number">Student Number:</label>
+                                <input type="text" id="edit_student_number" disabled>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div>
+                                <label for="edit_suffix">Suffix:</label>
+                                <select id="edit_suffix">
+                                    <option value="">None</option>
+                                    <option value="Jr.">Jr.</option>
+                                    <option value="Sr.">Sr.</option>
+                                    <option value="II">II</option>
+                                    <option value="III">III</option>
+                                    <option value="IV">IV</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="edit_year">Year:</label>
+                                <select id="edit_year" required>
+                                    <option value="1st">1st</option>
+                                    <option value="2nd">2nd</option>
+                                    <option value="3rd">3rd</option>
+                                    <option value="4th">4th</option>
+                                    <option value="5th">5th</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div>
+                                <label for="edit_program">Program:</label>
+                                <input type="text" id="edit_program" maxlength="10" oninput="this.value = this.value.toUpperCase()" required>
+                            </div>
+                            <div class="checkbox-label">
+                                <label for="edit_section">Section:</label>
+                                <input type="text" id="edit_section" required>
+                                <label><input type="checkbox" id="edit_irregular"> Irregular</label>
+                            </div>
+                        </div>
+                        <button type="button" onclick="submitEditStudent()">Submit</button>
+                    </form>
+                </div>
+            </div>
             <h2>Your Classes</h2>
-            <ul>
+            <select id="dayFilter" onchange="filterClassesByDay(this.value)">
+                <option value="">All Days</option>
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+            </select>
+            <ul id="classesList">
                 {% for cls in all_classes %}
-                    <li><a href="/dashboard?class_id={{ cls[0] }}">{{ cls[1] }} on {{ cls[2] }} ({{ cls[3] }} - {{ cls[4] }})</a></li>
+                    <li data-day="{{ cls[2] }}">
+                        <a href="/dashboard?class_id={{ cls[0] }}{% if selected_date %}&date={{ selected_date }}{% endif %}">{{ cls[1] }} on {{ cls[2] }} ({{ cls[3] }} - {{ cls[4] }})</a>
+                        <span class="action-buttons">
+                            <button class="icon-btn" onclick="showEditClassModal({{ cls[0] | tojson }}, '{{ cls[1] }}', '{{ cls[2] }}', '{{ cls[3] }}', '{{ cls[4] }}')">Edit</button>
+                            <button class="icon-btn" onclick="showDeleteClassModal({{ cls[0] | tojson }})">Delete</button>
+                        </span>
+                    </li>
                 {% endfor %}
             </ul>
+            <div class="calendar">
+                <h2>Calendar</h2>
+                <input type="date" id="calendarDate" value="{{ selected_date }}" onchange="loadClassesForDate(this.value)">
+            </div>
+            <div id="calendarClasses">
+                {% if classes_by_day %}
+                    {% for day, classes in classes_by_day.items() %}
+                        <h3>Classes on {{ day }}</h3>
+                        <ul>
+                            {% for cls in classes %}
+                                <li><a href="/dashboard?class_id={{ cls[0] }}{% if selected_date %}&date={{ selected_date }}{% endif %}">{{ cls[1] }} ({{ cls[2] }} - {{ cls[3] }})</a></li>
+                            {% endfor %}
+                        </ul>
+                    {% endfor %}
+                {% endif %}
+            </div>
         </div>
         <div class="right">
             {% if selected_class %}
                 <h2>{{ selected_class.name }} ({{ selected_class.start_time }} - {{ selected_class.end_time }})</h2>
                 <img src="/stream" id="cam">
                 <br>
-                <button onclick="enroll({{ selected_class.id }})">Enroll Student</button>
-                <button onclick="attendance({{ selected_class.id }})">Take Attendance</button>
+                <button onclick="enroll({{ selected_class.id | tojson }})">Enroll Student (Capture Face)</button>
+                <button onclick="attendance({{ selected_class.id | tojson }})">Take Attendance</button>
                 <h3>Students</h3>
                 <div class="students">
                     {% for sid, info in students_statuses.items() %}
-                        <div class="student {{ info.status }}">{{ info.name }} ({{ sid }}) - {{ info.status | capitalize }}</div>
+                        <div class="student {{ info.status }}">
+                            {{ info.name }} {% if 'IRREG' in info.section %} (IRREG){% endif %} ({{ sid }}) - {{ info.status | replace('_', ' ') | title }}
+                            <button class="icon-btn" onclick="showRemoveStudentModal({{ selected_class.id | tojson }}, '{{ sid }}')">Remove</button>
+                        </div>
                     {% endfor %}
+                </div>
+                <div id="removeStudentModal" class="modal">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeRemoveStudentModal()">&times;</span>
+                        <h2>Remove Student</h2>
+                        <form id="removeStudentForm">
+                            <input type="hidden" id="remove_class_id">
+                            <input type="hidden" id="remove_student_number">
+                            <label for="remove_username">Username:</label>
+                            <input type="text" id="remove_username" required>
+                            <label for="remove_password">Password:</label>
+                            <input type="password" id="remove_password" required>
+                            <button type="button" onclick="submitRemoveStudent()">Confirm Remove</button>
+                        </form>
+                    </div>
+                </div>
+                <button onclick="showAddStudentsModal({{ selected_class.id | tojson }})">Add Students</button>
+                <div id="addStudentsModal" class="modal">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeAddStudentsModal()">&times;</span>
+                        <h2>Add Students to Class</h2>
+                        <label for="studentYear">Year:</label>
+                        <input type="text" id="studentYear" oninput="filterStudents()">
+                        <label for="studentProgram">Program:</label>
+                        <input type="text" id="studentProgram" oninput="filterStudents()">
+                        <label for="studentSection">Section:</label>
+                        <input type="text" id="studentSection" oninput="filterStudents()">
+                        <table id="addStudentsTable">
+                            <thead>
+                                <tr>
+                                    <th>Select</th>
+                                    <th>First Name</th>
+                                    <th>Last Name</th>
+                                    <th>Year</th>
+                                    <th>Program</th>
+                                    <th>Section</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" onclick="submitAddStudents()">Add Selected</button>
+                    </div>
                 </div>
                 <h3>Recent Attendance</h3>
                 <ul id="list"></ul>
             {% else %}
-                <p>Select a class from the left to view details.</p>
+                <p>Select a class from the left or calendar to view details.</p>
             {% endif %}
         </div>
     </div>
-    <a href="/logout">Logout</a>
+    <a href="/logout" class="logout-btn">Logout</a>
 
     <script>
+    let currentPage = 1;
+    const pageSize = 5;
+
+    function showAddClassModal() {
+        document.getElementById('addClassModal').style.display = 'block';
+    }
+    function closeAddClassModal() {
+        document.getElementById('addClassModal').style.display = 'none';
+    }
+    async function submitAddClass() {
+        const form = document.getElementById('addClassForm');
+        const data = {
+            name: form.name.value,
+            day: form.day.value,
+            start_time: form.start_time.value,
+            end_time: form.end_time.value
+        };
+        const res = await fetch('/dashboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            closeAddClassModal();
+            location.reload();
+        } else {
+            alert("Error adding class");
+        }
+    }
+
+    function showEditClassModal(classId, name, day, startTime, endTime) {
+        document.getElementById('edit_class_id').value = classId;
+        document.getElementById('edit_name').value = name;
+        document.getElementById('edit_day').value = day;
+        document.getElementById('edit_start_time').value = startTime;
+        document.getElementById('edit_end_time').value = endTime;
+        document.getElementById('editClassModal').style.display = 'block';
+    }
+    function closeEditClassModal() {
+        document.getElementById('editClassModal').style.display = 'none';
+    }
+    async function submitEditClass() {
+        const classId = document.getElementById('edit_class_id').value;
+        const data = {
+            class_id: classId,
+            name: document.getElementById('edit_name').value,
+            day: document.getElementById('edit_day').value,
+            start_time: document.getElementById('edit_start_time').value,
+            end_time: document.getElementById('edit_end_time').value
+        };
+        const res = await fetch('/edit_class', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            closeEditClassModal();
+            location.reload();
+        } else {
+            alert("Error editing class");
+        }
+    }
+
+    function showDeleteClassModal(classId) {
+        document.getElementById('delete_class_id').value = classId;
+        document.getElementById('deleteClassModal').style.display = 'block';
+    }
+    function closeDeleteClassModal() {
+        document.getElementById('deleteClassModal').style.display = 'none';
+    }
+    async function submitDeleteClass() {
+        const classId = document.getElementById('delete_class_id').value;
+        const data = {
+            class_id: classId,
+            username: document.getElementById('delete_username').value,
+            password: document.getElementById('delete_password').value
+        };
+        const res = await fetch('/delete_class', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            closeDeleteClassModal();
+            location.reload();
+        } else {
+            alert("Error deleting class");
+        }
+    }
+
+    function showEnrollGlobalModal() {
+        document.getElementById('enrollGlobalModal').style.display = 'block';
+    }
+    function closeEnrollGlobalModal() {
+        document.getElementById('enrollGlobalForm').reset();
+        document.getElementById('enrollGlobalModal').style.display = 'none';
+    }
+    async function submitEnrollGlobal() {
+        const form = document.getElementById('enrollGlobalForm');
+        if (!/^\d-\d$/.test(form.section.value) && !document.getElementById('irregular').checked) {
+            alert("Section must be in format like 1-1 unless irregular");
+            return;
+        }
+        const data = {
+            student_number: form.student_number.value,
+            last_name: form.last_name.value,
+            first_name: form.first_name.value,
+            middle_name: form.middle_name.value,
+            year: form.year.value,
+            program: form.program.value,
+            section: form.section.value + (document.getElementById('irregular').checked ? ' IRREG' : ''),
+            suffix: form.suffix.value
+        };
+        const res = await fetch('/enroll_global', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            closeEnrollGlobalModal();
+            location.reload();
+        } else {
+            alert("Error enrolling student");
+        }
+    }
+
+    function showAllStudentsModal() {
+        currentPage = 1;
+        document.getElementById('allStudentsModal').style.display = 'block';
+        filterAllStudents();
+    }
+    function closeAllStudentsModal() {
+        document.getElementById('allStudentsModal').style.display = 'none';
+    }
+    async function filterAllStudents() {
+        const year = document.getElementById('allYear').value;
+        const program = document.getElementById('allProgram').value;
+        const section = document.getElementById('allSection').value;
+        const res = await fetch(`/get_students?year=${year}&program=${program}&section=${section}&offset=${(currentPage - 1) * pageSize}&limit=${pageSize}`);
+        const data = await res.json();
+        const students = data.students;
+        const total = data.total;
+        const tbody = document.querySelector('#allStudentsTable tbody');
+        tbody.innerHTML = '';
+        students.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${s[1]}</td>
+                <td>${s[2]}</td>
+                <td>${s[3]}</td>
+                <td>${s[4]}</td>
+                <td>${s[5]}</td>
+                <td><button class="icon-btn" onclick="showEditStudentModal('${s[0]}', '${s[1]}', '${s[2]}', '${s[6]}', '${s[3]}', '${s[4]}', '${s[5]}', '${s[7]}')">Edit</button> <button class="icon-btn" onclick="updateFace('${s[0]}')">Update Face</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${Math.ceil(total / pageSize)}`;
+    }
+
+    function changePage(delta) {
+        currentPage += delta;
+        if (currentPage < 1) currentPage = 1;
+        filterAllStudents();
+    }
+
+    function showEditStudentModal(studentNumber, firstName, lastName, middleName, year, program, section, suffix) {
+        document.getElementById('edit_student_number').value = studentNumber;
+        document.getElementById('edit_first_name').value = firstName;
+        document.getElementById('edit_last_name').value = lastName;
+        document.getElementById('edit_middle_name').value = middleName;
+        document.getElementById('edit_year').value = year;
+        document.getElementById('edit_program').value = program;
+        document.getElementById('edit_section').value = section.replace(' IRREG', '');
+        document.getElementById('edit_suffix').value = suffix;
+        document.getElementById('edit_irregular').checked = section.includes(' IRREG');
+        document.getElementById('editStudentModal').style.display = 'block';
+    }
+    function closeEditStudentModal() {
+        document.getElementById('editStudentModal').style.display = 'none';
+    }
+    async function submitEditStudent() {
+        const data = {
+            student_number: document.getElementById('edit_student_number').value,
+            first_name: document.getElementById('edit_first_name').value,
+            last_name: document.getElementById('edit_last_name').value,
+            middle_name: document.getElementById('edit_middle_name').value,
+            year: document.getElementById('edit_year').value,
+            program: document.getElementById('edit_program').value,
+            section: document.getElementById('edit_section').value + (document.getElementById('edit_irregular').checked ? ' IRREG' : ''),
+            suffix: document.getElementById('edit_suffix').value
+        };
+        const res = await fetch('/edit_student', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            closeEditStudentModal();
+            filterAllStudents();
+        } else {
+            alert("Error editing student");
+        }
+    }
+
+    function filterClassesByDay(day) {
+        const list = document.getElementById('classesList').getElementsByTagName('li');
+        for (let li of list) {
+            li.style.display = (day === '' || li.dataset.day === day) ? 'flex' : 'none';
+        }
+    }
+
+    function loadClassesForDate(date) {
+        location.href = `/dashboard?date=${date}`;
+    }
+
+    let currentClassId;
+    function showAddStudentsModal(classId) {
+        currentClassId = classId;
+        document.getElementById('addStudentsModal').style.display = 'block';
+        filterStudents();
+    }
+    function closeAddStudentsModal() {
+        document.getElementById('addStudentsModal').style.display = 'none';
+    }
+    async function filterStudents() {
+        const year = document.getElementById('studentYear').value;
+        const program = document.getElementById('studentProgram').value;
+        const section = document.getElementById('studentSection').value;
+        const res = await fetch(`/get_students?year=${year}&program=${program}&section=${section}`);
+        const data = await res.json();
+        const students = data.students;
+        const tbody = document.querySelector('#addStudentsTable tbody');
+        tbody.innerHTML = '';
+        students.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="checkbox" value="${s[0]}"></td>
+                <td>${s[1]}</td>
+                <td>${s[2]}</td>
+                <td>${s[3]}</td>
+                <td>${s[4]}</td>
+                <td>${s[5]}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    async function submitAddStudents() {
+        const checkboxes = document.querySelectorAll('#addStudentsTable input:checked');
+        const student_numbers = Array.from(checkboxes).map(cb => cb.value);
+        await fetch('/add_students_to_class', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ class_id: currentClassId, student_numbers })
+        });
+        location.reload();
+    }
+
+    function showRemoveStudentModal(classId, studentNumber) {
+        document.getElementById('remove_class_id').value = classId;
+        document.getElementById('remove_student_number').value = studentNumber;
+        document.getElementById('removeStudentModal').style.display = 'block';
+    }
+    function closeRemoveStudentModal() {
+        document.getElementById('removeStudentModal').style.display = 'none';
+    }
+    async function submitRemoveStudent() {
+        const data = {
+            class_id: document.getElementById('remove_class_id').value,
+            student_number: document.getElementById('remove_student_number').value,
+            username: document.getElementById('remove_username').value,
+            password: document.getElementById('remove_password').value
+        };
+        const res = await fetch('/remove_student_from_class', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            closeRemoveStudentModal();
+            location.reload();
+        } else {
+            alert("Error removing student");
+        }
+    }
+
     async function enroll(classId) {
-        const name = prompt("Student name:");
-        if (!name) return;
+        const student_number = prompt("Enter student number to capture face:");
+        if (!student_number) return;
         try {
-            const res = await fetch(`/capture_enroll?class_id=${classId}&name=${name}`);
+            const res = await fetch(`/capture_enroll?class_id=${classId}&student_number=${student_number}`);
             const data = await res.json();
             alert(JSON.stringify(data));
             location.reload();
@@ -95,7 +697,7 @@
             const data = await res.json();
             alert(JSON.stringify(data));
             refresh(classId);
-            location.reload();  // Reload to update statuses
+            location.reload();
         } catch(e) {
             alert("Error: " + e);
         }
@@ -105,7 +707,7 @@
         if (!classId) return;
         const res = await fetch(`/attendance?class_id=${classId}`);
         const data = await res.json();
-        const list = document.getElementById("list");
+        const list = document.getElementById('list');
         list.innerHTML = "";
         data.forEach(r => {
             const li = document.createElement("li");
@@ -115,7 +717,7 @@
     }
 
     {% if selected_class %}
-    setInterval(() => refresh({{ selected_class.id }}), 3000);
+    setInterval(() => refresh({{ selected_class.id | tojson }}), 3000);
     {% endif %}
     </script>
 </body>
