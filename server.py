@@ -1,22 +1,26 @@
 import cv2
 import numpy as np
 import face_recognition
-from flask import Flask, jsonify, render_template, request, Response, session, redirect, url_for
+from flask import Flask, jsonify, render_template, request, Response, session, redirect, url_for, make_response
 import sqlite3
 import os
 import time
 import threading
 import requests
 import urllib.parse
+import csv
+from io import StringIO
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
 # ================= CONFIGURATION =================
-ESP32_IP = "192.168.68.108"  # <--- MAKE SURE THIS MATCHES YOUR LCD
+ESP32_IP = "192.168.18.59" 
 ESP32_STREAM = f"http://{ESP32_IP}:81/stream"
 
-DB = "attendance.db"
-UPLOADS = "student_images"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB = os.path.join(BASE_DIR, "attendance.db")
+UPLOADS = os.path.join(BASE_DIR, "student_images")
+
 os.makedirs(UPLOADS, exist_ok=True)
 SECRET_KEY = "your_secret_key_here"
 LATE_THRESHOLD = 15
@@ -24,59 +28,42 @@ LATE_THRESHOLD = 15
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-# ===== Global for MJPEG streaming =====
 current_frame = None
 frame_lock = threading.Lock()
 
 # ================= DATABASE FUNCTIONS =================
 def init_db():
+    print(f"Connecting to database at: {DB}")
     with sqlite3.connect(DB) as c:
         cur = c.cursor()
-        cur.execute('''CREATE TABLE IF NOT EXISTS professors (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username TEXT UNIQUE,
-                        password_hash TEXT)''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS professors (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT)''')
+        
         cur.execute('''CREATE TABLE IF NOT EXISTS classes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        professor_id INTEGER,
-                        name TEXT,
-                        day TEXT,
-                        start_time TEXT,
-                        end_time TEXT)''')
-        cur.execute('''CREATE TABLE IF NOT EXISTS students (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        student_number TEXT UNIQUE,
-                        last_name TEXT,
-                        first_name TEXT,
-                        middle_name TEXT,
-                        year TEXT,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                        professor_id INTEGER, 
+                        name TEXT, 
+                        day TEXT, 
+                        start_time TEXT, 
+                        end_time TEXT, 
+                        start_date TEXT, 
+                        end_date TEXT,
                         program TEXT,
-                        section TEXT,
-                        suffix TEXT,
-                        name TEXT,
-                        encoding BLOB)''')
-        cur.execute('''CREATE TABLE IF NOT EXISTS class_students (
-                        class_id INTEGER,
-                        student_number TEXT,
-                        FOREIGN KEY(class_id) REFERENCES classes(id),
-                        FOREIGN KEY(student_number) REFERENCES students(student_number))''')
-        cur.execute('''CREATE TABLE IF NOT EXISTS attendance (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        class_id INTEGER,
-                        student_number TEXT,
-                        timestamp TEXT,
-                        status TEXT)''')
+                        year TEXT,
+                        section TEXT)''')
+                        
+        cur.execute('''CREATE TABLE IF NOT EXISTS students (id INTEGER PRIMARY KEY AUTOINCREMENT, student_number TEXT UNIQUE, last_name TEXT, first_name TEXT, middle_name TEXT, year TEXT, program TEXT, section TEXT, suffix TEXT, name TEXT, encoding BLOB)''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS class_students (class_id INTEGER, student_number TEXT, FOREIGN KEY(class_id) REFERENCES classes(id), FOREIGN KEY(student_number) REFERENCES students(student_number))''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, class_id INTEGER, student_number TEXT, timestamp TEXT, status TEXT)''')
         c.commit()
         
         # Migrations
-        cur.execute("PRAGMA table_info(attendance)")
-        if 'status' not in [col[1] for col in cur.fetchall()]:
-            cur.execute("ALTER TABLE attendance ADD COLUMN status TEXT")
-        cur.execute("PRAGMA table_info(students)")
+        cur.execute("PRAGMA table_info(classes)")
         cols = [col[1] for col in cur.fetchall()]
-        if 'program' not in cols: cur.execute("ALTER TABLE students ADD COLUMN program TEXT")
-        if 'suffix' not in cols: cur.execute("ALTER TABLE students ADD COLUMN suffix TEXT")
-        if 'middle_name' not in cols: cur.execute("ALTER TABLE students ADD COLUMN middle_name TEXT")
+        if 'start_date' not in cols: cur.execute("ALTER TABLE classes ADD COLUMN start_date TEXT")
+        if 'end_date' not in cols: cur.execute("ALTER TABLE classes ADD COLUMN end_date TEXT")
+        if 'program' not in cols: cur.execute("ALTER TABLE classes ADD COLUMN program TEXT")
+        if 'year' not in cols: cur.execute("ALTER TABLE classes ADD COLUMN year TEXT")
+        if 'section' not in cols: cur.execute("ALTER TABLE classes ADD COLUMN section TEXT")
 
 def register_professor(username, password):
     password_hash = generate_password_hash(password)
@@ -85,17 +72,24 @@ def register_professor(username, password):
             c.cursor().execute("INSERT INTO professors (username, password_hash) VALUES (?, ?)", (username, password_hash))
             c.commit()
             return True
-        except sqlite3.IntegrityError:
-            return False
+        except sqlite3.IntegrityError: return False
 
-def add_class(pid, name, day, start, end):
+def verify_professor_credentials(username, password):
     with sqlite3.connect(DB) as c:
-        c.cursor().execute("INSERT INTO classes (professor_id, name, day, start_time, end_time) VALUES (?, ?, ?, ?, ?)", (pid, name, day, start, end))
+        row = c.cursor().execute("SELECT password_hash FROM professors WHERE username=?", (username,)).fetchone()
+        if row and check_password_hash(row[0], password):
+            return True
+    return False
+
+def add_class(pid, name, day, start, end, s_date, e_date, program, year, section):
+    with sqlite3.connect(DB) as c:
+        c.cursor().execute('''INSERT INTO classes (professor_id, name, day, start_time, end_time, start_date, end_date, program, year, section) 
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (pid, name, day, start, end, s_date, e_date, program, year, section))
         c.commit()
 
-def edit_class(cid, pid, name, day, start, end):
+def edit_class(cid, pid, name, day, start, end, s_date, e_date, program, year, section):
     with sqlite3.connect(DB) as c:
-        c.cursor().execute("UPDATE classes SET name=?, day=?, start_time=?, end_time=? WHERE id=? AND professor_id=?", (name, day, start, end, cid, pid))
+        c.cursor().execute("UPDATE classes SET name=?, day=?, start_time=?, end_time=?, start_date=?, end_date=?, program=?, year=?, section=? WHERE id=? AND professor_id=?", (name, day, start, end, s_date, e_date, program, year, section, cid, pid))
         c.commit()
 
 def delete_class(cid, pid):
@@ -109,18 +103,13 @@ def save_student(sn, ln, fn, mn, yr, prog, sec, suf, encoding=None):
     name = f"{fn} {mn} {ln} {suf}".strip()
     enc_blob = encoding.tobytes() if encoding is not None else None
     with sqlite3.connect(DB) as c:
-        c.cursor().execute('''INSERT OR REPLACE INTO students 
-                       (student_number, last_name, first_name, middle_name, year, program, section, suffix, name, encoding) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    (sn, ln, fn, mn, yr, prog.upper(), sec, suf, name, enc_blob))
+        c.cursor().execute('''INSERT OR REPLACE INTO students (student_number, last_name, first_name, middle_name, year, program, section, suffix, name, encoding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (sn, ln, fn, mn, yr, prog.upper(), sec, suf, name, enc_blob))
         c.commit()
 
 def edit_student(sn, ln, fn, mn, yr, prog, sec, suf):
     name = f"{fn} {mn} {ln} {suf}".strip()
     with sqlite3.connect(DB) as c:
-        c.cursor().execute('''UPDATE students SET last_name=?, first_name=?, middle_name=?, year=?, program=?, section=?, suffix=?, name=? 
-                       WHERE student_number=?''',
-                    (ln, fn, mn, yr, prog.upper(), sec, suf, name, sn))
+        c.cursor().execute('''UPDATE students SET last_name=?, first_name=?, middle_name=?, year=?, program=?, section=?, suffix=?, name=? WHERE student_number=?''', (ln, fn, mn, yr, prog.upper(), sec, suf, name, sn))
         c.commit()
 
 def get_all_encodings():
@@ -136,25 +125,43 @@ def get_all_encodings():
 
 def get_all_professor_classes(pid):
     with sqlite3.connect(DB) as c:
-        return c.cursor().execute("SELECT id, name, day, start_time, end_time FROM classes WHERE professor_id=?", (pid,)).fetchall()
+        return c.cursor().execute("SELECT id, name, day, start_time, end_time, section, program, year, start_date, end_date FROM classes WHERE professor_id=?", (pid,)).fetchall()
 
 def get_classes_by_day(pid, day):
     with sqlite3.connect(DB) as c:
-        return c.cursor().execute("SELECT id, name, start_time, end_time FROM classes WHERE professor_id=? AND day=?", (pid, day)).fetchall()
+        return c.cursor().execute("SELECT id, name, start_time, end_time, section FROM classes WHERE professor_id=? AND day=?", (pid, day)).fetchall()
 
 def get_class_details(cid, pid):
     with sqlite3.connect(DB) as c:
-        return c.cursor().execute("SELECT name, start_time, end_time, day FROM classes WHERE id=? AND professor_id=?", (cid, pid)).fetchone()
+        return c.cursor().execute("SELECT name, start_time, end_time, day, program, year, section, start_date, end_date FROM classes WHERE id=? AND professor_id=?", (cid, pid)).fetchone()
 
-def get_all_students(year=None, program=None, section=None, name=None, student_number=None, offset=0, limit=None):
+def count_all_students(year=None, program=None, section=None, search_type=None, search_val=None, is_irregular=False):
+    with sqlite3.connect(DB) as c:
+        query = "SELECT COUNT(*) FROM students"
+        params, conds = [], []
+        if year: conds.append("year=?"), params.append(year)
+        if program: conds.append("program=?"), params.append(program.upper())
+        if section: conds.append("section LIKE ?"), params.append(f"%{section}%")
+        if is_irregular: conds.append("section LIKE '%IRREG%'")
+        if search_val:
+            if search_type == 'first_name': conds.append("first_name LIKE ?"), params.append(f"%{search_val}%")
+            elif search_type == 'last_name': conds.append("last_name LIKE ?"), params.append(f"%{search_val}%")
+            elif search_type == 'student_number': conds.append("student_number LIKE ?"), params.append(f"%{search_val}%")
+        if conds: query += " WHERE " + " AND ".join(conds)
+        return c.cursor().execute(query, params).fetchone()[0]
+
+def get_all_students(year=None, program=None, section=None, search_type=None, search_val=None, is_irregular=False, offset=0, limit=None):
     with sqlite3.connect(DB) as c:
         query = "SELECT student_number, first_name, last_name, year, program, section, middle_name, suffix, (encoding IS NOT NULL) FROM students"
         params, conds = [], []
         if year: conds.append("year=?"), params.append(year)
         if program: conds.append("program=?"), params.append(program.upper())
-        if section: conds.append("section=?"), params.append(section)
-        if name: conds.append("name LIKE ?"), params.append(f"%{name}%")
-        if student_number: conds.append("student_number LIKE ?"), params.append(f"%{student_number}%")
+        if section: conds.append("section LIKE ?"), params.append(f"%{section}%")
+        if is_irregular: conds.append("section LIKE '%IRREG%'")
+        if search_val:
+            if search_type == 'first_name': conds.append("first_name LIKE ?"), params.append(f"%{search_val}%")
+            elif search_type == 'last_name': conds.append("last_name LIKE ?"), params.append(f"%{search_val}%")
+            elif search_type == 'student_number': conds.append("student_number LIKE ?"), params.append(f"%{search_val}%")
         if conds: query += " WHERE " + " AND ".join(conds)
         query += " ORDER BY last_name, first_name"
         if limit is not None: query += " LIMIT ? OFFSET ?"; params += [limit, offset]
@@ -165,86 +172,133 @@ def add_students_to_class(cid, sns):
         for sn in sns: c.cursor().execute("INSERT OR IGNORE INTO class_students (class_id, student_number) VALUES (?, ?)", (cid, sn))
         c.commit()
 
+def import_section_students(cid):
+    with sqlite3.connect(DB) as c:
+        cls = c.cursor().execute("SELECT program, year, section FROM classes WHERE id=?", (cid,)).fetchone()
+        if not cls: return 0
+        prog, yr, sec = cls
+        students = c.cursor().execute("SELECT student_number FROM students WHERE program=? AND year=? AND section=?", (prog, yr, sec)).fetchall()
+        count = 0
+        for s in students:
+            c.cursor().execute("INSERT OR IGNORE INTO class_students (class_id, student_number) VALUES (?, ?)", (cid, s[0]))
+            count += 1
+        c.commit()
+        return count
+
 def remove_student_from_class(cid, sn):
     with sqlite3.connect(DB) as c:
         c.cursor().execute("DELETE FROM class_students WHERE class_id=? AND student_number=?", (cid, sn))
         c.cursor().execute("DELETE FROM attendance WHERE class_id=? AND student_number=?", (cid, sn))
         c.commit()
 
-def get_class_students(cid):
+def get_class_students_with_details(cid):
     with sqlite3.connect(DB) as c:
-        return c.cursor().execute('''SELECT s.student_number, s.name, s.section FROM students s
-                       JOIN class_students cs ON s.student_number = cs.student_number
-                       WHERE cs.class_id=? ORDER BY s.last_name, s.first_name''', (cid,)).fetchall()
+        return c.cursor().execute('''
+            SELECT s.student_number, s.last_name, s.first_name, s.middle_name, s.section 
+            FROM students s
+            JOIN class_students cs ON s.student_number = cs.student_number
+            WHERE cs.class_id=? 
+            ORDER BY s.last_name, s.first_name''', (cid,)).fetchall()
 
-def get_today_attendance(cid):
-    today = datetime.now().strftime("%Y-%m-%d")
+def get_attendance_by_date(cid, target_date):
+    if not target_date: target_date = datetime.now().strftime("%Y-%m-%d")
     with sqlite3.connect(DB) as c:
-        rows = c.cursor().execute("SELECT student_number, status FROM attendance WHERE class_id=? AND timestamp LIKE ?", (cid, f"{today}%")).fetchall()
+        rows = c.cursor().execute("SELECT student_number, status FROM attendance WHERE class_id=? AND timestamp LIKE ?", (cid, f"{target_date}%")).fetchall()
     return {r[0]: r[1] for r in rows}
 
-def get_student_statuses(cid):
-    students = get_class_students(cid)
-    attendance = get_today_attendance(cid)
-    return {row[0]: {'name': row[1], 'section': row[2], 'status': attendance.get(row[0], 'absent')} for row in students}
+def get_student_statuses(cid, target_date=None):
+    students = get_class_students_with_details(cid)
+    attendance = get_attendance_by_date(cid, target_date)
+    results = {}
+    for row in students:
+        sn, ln, fn, mn, section = row
+        mi = f" {mn[0]}." if mn and len(mn) > 0 else ""
+        formatted_name = f"{ln}, {fn}{mi}"
+        results[sn] = {'name': formatted_name, 'section': section, 'status': attendance.get(sn, 'absent')}
+    return results
 
 def compute_status(start, ts):
     s_dt = datetime.strptime(start, "%H:%M")
     t_dt = datetime.strptime(ts.split(" ")[1], "%H:%M:%S")
     return "on_time" if t_dt <= s_dt + timedelta(minutes=LATE_THRESHOLD) else "late"
 
-def log_attendance(cid, sn, status):
-    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+def log_attendance(cid, sn, status, specific_date=None):
+    # If specific_date is provided, use it (e.g. for manual override), otherwise use now
+    if specific_date:
+        # Append current time to the date to make a timestamp
+        ts = f"{specific_date} {datetime.now().strftime('%H:%M:%S')}"
+    else:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        
     with sqlite3.connect(DB) as c:
         today = ts.split(" ")[0]
+        # Check if record exists for this day
         if not c.cursor().execute("SELECT * FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{today}%")).fetchone():
             c.cursor().execute("INSERT INTO attendance (class_id, student_number, timestamp, status) VALUES (?, ?, ?, ?)", (cid, sn, ts, status))
             c.commit()
 
-# ================= ROBUST FRAME GRABBER (Requests Mode) =================
+def count_past_classes(day_name, start_date_str, end_date_str):
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d")
+        end = datetime.strptime(end_date_str, "%Y-%m-%d")
+        today = datetime.now()
+        limit = min(end, today)
+        count = 0; curr = start; target_day_idx = time.strptime(day_name, "%A").tm_wday 
+        while curr <= limit:
+            if curr.weekday() == target_day_idx: count += 1
+            curr += timedelta(days=1)
+        return count
+    except: return 0
+
+def find_nearest_class_date(day_name, start_date_str, end_date_str):
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        today = datetime.now().date()
+        target_weekday = time.strptime(day_name, "%A").tm_wday
+        delta = timedelta(days=1)
+        candidates = []
+        curr = start
+        while curr <= end:
+            if curr.weekday() == target_weekday:
+                candidates.append(curr)
+            curr += delta
+        if not candidates:
+            return None
+        closest = min(candidates, key=lambda d: abs((d - today).days))
+        return closest.strftime("%Y-%m-%d")
+    except:
+        return None
+
 def grab_frames():
     global current_frame
     bytes_data = b''
-    
     while True:
         try:
-            print(f"Connecting to ESP32: {ESP32_STREAM}")
             stream = requests.get(ESP32_STREAM, stream=True, timeout=5)
-            
             if stream.status_code == 200:
-                print("Stream Connected! Receiving data...")
                 for chunk in stream.iter_content(chunk_size=1024):
                     bytes_data += chunk
-                    a = bytes_data.find(b'\xff\xd8')
-                    b = bytes_data.find(b'\xff\xd9')
+                    a = bytes_data.find(b'\xff\xd8'); b = bytes_data.find(b'\xff\xd9')
                     if a != -1 and b != -1:
-                        jpg = bytes_data[a:b+2]
-                        bytes_data = bytes_data[b+2:]
+                        jpg = bytes_data[a:b+2]; bytes_data = bytes_data[b+2:]
                         img = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
                         if img is not None:
-                            with frame_lock:
-                                current_frame = img
-            else:
-                print(f"Stream Status Code: {stream.status_code}")
-                time.sleep(2)
-        except Exception as e:
-            print(f"Waiting for ESP32... Error: {e}")
-            time.sleep(2)
+                            with frame_lock: current_frame = img
+            else: time.sleep(2)
+        except: time.sleep(2)
 
 def get_latest_frame():
-    with frame_lock:
-        return current_frame.copy() if current_frame is not None else None
+    with frame_lock: return current_frame.copy() if current_frame is not None else None
 
 def generate_mjpeg():
     while True:
         frame = get_latest_frame()
-        if frame is None:
-            time.sleep(0.05)
-            continue
+        if frame is None: time.sleep(0.05); continue
         ret, jpeg = cv2.imencode('.jpg', frame)
         if ret: yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
 
-# ================= FLASK ROUTES =================
+# ================= ROUTES =================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -266,70 +320,108 @@ def register():
     return render_template("register.html")
 
 @app.route("/logout")
-def logout():
-    session.pop("professor_id", None)
-    return redirect(url_for("login"))
+def logout(): session.pop("professor_id", None); return redirect(url_for("login"))
 
 @app.route("/")
-def index():
-    return redirect(url_for("dashboard")) if "professor_id" in session else redirect(url_for("login"))
+def index(): return redirect(url_for("dashboard")) if "professor_id" in session else redirect(url_for("login"))
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if "professor_id" not in session: return redirect(url_for("login"))
     if request.method == "POST":
         d = request.json
-        add_class(session["professor_id"], d.get("name"), d.get("day"), d.get("start_time"), d.get("end_time"))
+        add_class(session["professor_id"], d.get("name"), d.get("day"), d.get("start_time"), d.get("end_time"), 
+                  d.get("start_date"), d.get("end_date"), d.get("program"), d.get("year"), d.get("section"))
         return jsonify({"status": "added"})
     
     cid = request.args.get("class_id", type=int)
     classes = get_all_professor_classes(session["professor_id"])
-    
-    s_date = request.args.get("date")
-    s_day = request.args.get("day")
-    if s_date: 
-        try: s_day = datetime.strptime(s_date, "%Y-%m-%d").strftime("%A")
-        except: pass
-        
+    s_date = request.args.get("date", None)
+    s_day = datetime.strptime(s_date, "%Y-%m-%d").strftime("%A") if s_date else None
     day_classes = {s_day: get_classes_by_day(session["professor_id"], s_day)} if s_day else {}
     
     sel_class, stats = None, None
+    present, late, absent = 0, 0, 0
+    error_msg = None
+    today = datetime.now().strftime("%Y-%m-%d")
     if cid:
         det = get_class_details(cid, session["professor_id"])
         if det:
-            sel_class = {'id': cid, 'name': det[0], 'start_time': det[1], 'end_time': det[2], 'day': det[3]}
-            stats = get_student_statuses(cid)
+            sel_class = {'id': cid, 'name': det[0], 'start_time': det[1], 'end_time': det[2], 'day': det[3], 'program': det[4], 'year': det[5], 'section': det[6], 'start_date': det[7], 'end_date': det[8]}
+            if not s_date:
+                s_date = find_nearest_class_date(sel_class['day'], sel_class['start_date'], sel_class['end_date'])
+            if s_date:
+                try:
+                    s_datetime = datetime.strptime(s_date, "%Y-%m-%d")
+                    start_dt = datetime.strptime(sel_class['start_date'], "%Y-%m-%d")
+                    end_dt = datetime.strptime(sel_class['end_date'], "%Y-%m-%d")
+                    if start_dt <= s_datetime <= end_dt and s_datetime.strftime("%A") == sel_class['day']:
+                        stats = get_student_statuses(cid, s_date)
+                        present = sum(1 for v in stats.values() if v['status'] == 'on_time')
+                        late = sum(1 for v in stats.values() if v['status'] == 'late')
+                        absent = sum(1 for v in stats.values() if v['status'] == 'absent')
+                    else:
+                        error_msg = "Invalid date for this class. No attendance tracked."
+                except ValueError:
+                    error_msg = "Invalid date format."
             
-    return render_template("dashboard.html", all_classes=classes, classes_by_day=day_classes, selected_class=sel_class, students_statuses=stats, username=session.get("username"), selected_day=s_day, selected_date=s_date)
+    return render_template("dashboard.html", all_classes=classes, classes_by_day=day_classes, selected_class=sel_class, students_statuses=stats, username=session.get("username"), selected_day=s_day, selected_date=s_date, present=present, late=late, absent=absent, today=today, error_msg=error_msg)
 
 @app.route("/edit_class", methods=["POST"])
 def edit_class_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    edit_class(d.get("class_id"), session["professor_id"], d.get("name"), d.get("day"), d.get("start_time"), d.get("end_time"))
+    edit_class(d.get("class_id"), session["professor_id"], d.get("name"), d.get("day"), d.get("start_time"), d.get("end_time"), d.get("start_date"), d.get("end_date"), d.get("program"), d.get("year"), d.get("section"))
     return jsonify({"status": "edited"})
 
 @app.route("/delete_class", methods=["POST"])
 def delete_class_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    with sqlite3.connect(DB) as c:
-        row = c.cursor().execute("SELECT password_hash FROM professors WHERE id=? AND username=?", (session["professor_id"], d.get("username"))).fetchone()
-        if row and check_password_hash(row[0], d.get("password")):
-            delete_class(d.get("class_id"), session["professor_id"])
-            return jsonify({"status": "deleted"})
-        return jsonify({"error": "Invalid credentials"}), 401
+    if verify_professor_credentials(d.get("username"), d.get("password")):
+        delete_class(d.get("class_id"), session["professor_id"])
+        return jsonify({"status": "deleted"})
+    return jsonify({"error": "Invalid credentials"}), 401
 
 @app.route("/remove_student_from_class", methods=["POST"])
 def remove_student_from_class_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    with sqlite3.connect(DB) as c:
-        row = c.cursor().execute("SELECT password_hash FROM professors WHERE id=? AND username=?", (session["professor_id"], d.get("username"))).fetchone()
-        if row and check_password_hash(row[0], d.get("password")):
-            remove_student_from_class(d.get("class_id"), d.get("student_number"))
-            return jsonify({"status": "removed"})
-        return jsonify({"error": "Invalid credentials"}), 401
+    # CREDENTIAL CHECK RESTORED
+    if verify_professor_credentials(d.get("username"), d.get("password")):
+        remove_student_from_class(d.get("class_id"), d.get("student_number"))
+        return jsonify({"status": "removed"})
+    return jsonify({"error": "Invalid credentials"}), 401
+
+# NEW: Manual Attendance Route
+@app.route("/manual_attendance", methods=["POST"])
+def manual_attendance_route():
+    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
+    d = request.json
+    if verify_professor_credentials(d.get("username"), d.get("password")):
+        cid = d.get("class_id")
+        today = datetime.now().strftime("%Y-%m-%d")
+        if d.get("date") == today:
+            with sqlite3.connect(DB) as c:
+                start_time = c.cursor().execute("SELECT start_time FROM classes WHERE id=?", (cid,)).fetchone()[0]
+            status = compute_status(start_time, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        else:
+            status = "on_time"
+        log_attendance(cid, d.get("student_number"), status, d.get("date"))
+        return jsonify({"status": "marked"})
+    return jsonify({"error": "Invalid credentials"}), 401
+
+# NEW: Clear Attendance Route
+@app.route("/clear_attendance", methods=["POST"])
+def clear_attendance_route():
+    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
+    d = request.json
+    if verify_professor_credentials(d.get("username"), d.get("password")):
+        with sqlite3.connect(DB) as c:
+            c.cursor().execute("DELETE FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (d.get("class_id"), d.get("student_number"), f"{d.get('date')}%"))
+            c.commit()
+        return jsonify({"status": "cleared"})
+    return jsonify({"error": "Invalid credentials"}), 401
 
 @app.route("/enroll_global", methods=["POST"])
 def enroll_global():
@@ -337,7 +429,7 @@ def enroll_global():
     d = request.json
     try:
         save_student(d.get("student_number"), d.get("last_name"), d.get("first_name"), d.get("middle_name"), d.get("year"), d.get("program"), d.get("section"), d.get("suffix"))
-        return jsonify({"status": "enrolled"})
+        return jsonify({"status": "enrolled", "student_number": d.get("student_number")})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route("/edit_student", methods=["POST"])
@@ -354,19 +446,42 @@ def capture_global():
     frame = get_latest_frame()
     if frame is None: return jsonify({"error": "No frame"}), 500
     encs = face_recognition.face_encodings(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    if not encs: return jsonify({"error": "No face detected"}), 400
-    
+    if len(encs) != 1: return jsonify({"error": "Exactly one face must be detected"}), 400
     with sqlite3.connect(DB) as c:
         c.cursor().execute("UPDATE students SET encoding=? WHERE student_number=?", (encs[0].tobytes(), sn))
         c.commit()
     cv2.imwrite(os.path.join(UPLOADS, f"{sn}.jpg"), frame)
     return jsonify({"status": "captured", "student_number": sn})
 
+@app.route("/upload_face", methods=["POST"])
+def upload_face():
+    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
+    sn = request.form.get("student_number")
+    if 'file' not in request.files: return jsonify({"error": "No file"}), 400
+    file = request.files['file']
+    if file.filename == '': return jsonify({"error": "No selected file"}), 400
+    if file and file.filename.lower().endswith(('.jpg', '.jpeg')):
+        img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        encs = face_recognition.face_encodings(rgb)
+        if len(encs) != 1: return jsonify({"error": "Exactly one face must be detected"}), 400
+        with sqlite3.connect(DB) as c:
+            c.cursor().execute("UPDATE students SET encoding=? WHERE student_number=?", (encs[0].tobytes(), sn))
+            c.commit()
+        cv2.imwrite(os.path.join(UPLOADS, f"{sn}.jpg"), img)
+        return jsonify({"status": "uploaded"})
+    return jsonify({"error": "Invalid file"}), 400
+
 @app.route("/get_students", methods=["GET"])
 def get_students():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
-    rows = get_all_students(request.args.get("year"), request.args.get("program"), request.args.get("section"), request.args.get("name"), request.args.get("student_number"), request.args.get("offset", 0, type=int), request.args.get("limit", 5, type=int))
-    total = len(get_all_students(request.args.get("year"), request.args.get("program"), request.args.get("section"), request.args.get("name"), request.args.get("student_number")))
+    y, p, s, n, sn = request.args.get("year"), request.args.get("program"), request.args.get("section"), request.args.get("name"), request.args.get("student_number")
+    off, lim = request.args.get("offset", 0, type=int), request.args.get("limit", 10, type=int)
+    search_type = request.args.get("search_type")
+    search_val = request.args.get("search_val")
+    is_irregular = request.args.get("is_irregular") == 'true'
+    rows = get_all_students(y, p, s, search_type, search_val, is_irregular, off, lim)
+    total = count_all_students(y, p, s, search_type, search_val, is_irregular)
     return jsonify({"students": rows, "total": total})
 
 @app.route("/add_students_to_class", methods=["POST"])
@@ -374,6 +489,13 @@ def add_students_to_class_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     add_students_to_class(request.json.get("class_id"), request.json.get("student_numbers", []))
     return jsonify({"status": "added"})
+
+@app.route("/import_section_students", methods=["POST"])
+def import_section_students_route():
+    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
+    cid = request.json.get("class_id")
+    count = import_section_students(cid)
+    return jsonify({"status": "imported", "count": count})
 
 @app.route("/stream")
 def stream():
@@ -391,13 +513,10 @@ def capture_attendance():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     cid = request.args.get("class_id", type=int)
     if not cid: return jsonify({"error": "Class ID required"}), 400
-    
     frame = get_latest_frame()
     if frame is None: return jsonify({"error": "No frame"}), 500
 
     encs = face_recognition.face_encodings(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    
-    # 1. NO FACE
     if not encs:
         try: requests.get(f"http://{ESP32_IP}/update_lcd?message=No%20Face%20Detected", timeout=0.5)
         except: pass
@@ -405,57 +524,86 @@ def capture_attendance():
 
     query = encs[0]
     ids, names, known_encs = get_all_encodings()
-    
-    # 2. NO STUDENTS ENROLLED
     if not known_encs: return jsonify({"status": "no_known_faces"})
 
     dists = face_recognition.face_distance(known_encs, query)
     best_idx = int(np.argmin(dists))
-    
-    # 3. MATCH FOUND
     if dists[best_idx] < 0.5:
         sn = ids[best_idx]
-        
-        # Check Class Enrollment
         with sqlite3.connect(DB) as c:
             if not c.cursor().execute("SELECT * FROM class_students WHERE class_id=? AND student_number=?", (cid, sn)).fetchone():
                 try: requests.get(f"http://{ESP32_IP}/update_lcd?message=Not%20In%20Class", timeout=0.5)
                 except: pass
                 return jsonify({"status": "not_in_class"})
-            
-            # Get Class Time
             start_time = c.cursor().execute("SELECT start_time FROM classes WHERE id=?", (cid,)).fetchone()[0]
-            
-            # --------------------------------------------------------
-            # FETCH LAST NAME AND FIRST NAME FOR LCD FORMATTING
-            # --------------------------------------------------------
             row = c.cursor().execute("SELECT last_name, first_name FROM students WHERE student_number=?", (sn,)).fetchone()
             if row:
-                lname = row[0]
-                fname = row[1]
-                # Get first word of first name
+                lname = row[0] if row[0] else ""
+                fname = row[1] if row[1] else ""
                 fname_short = fname.split()[0] if fname else ""
                 lcd_name = f"{lname}, {fname_short}"
             else:
                 lcd_name = "Unknown"
-            # --------------------------------------------------------
 
         status = compute_status(start_time, time.strftime("%Y-%m-%d %H:%M:%S"))
         log_attendance(cid, sn, status)
-
-        # UPDATE LCD with Shortened Name
         try:
             msg = f"{urllib.parse.quote(lcd_name)}|{urllib.parse.quote(status.upper())}"
             requests.get(f"http://{ESP32_IP}/update_lcd?message={msg}", timeout=1)
         except: pass
-
         return jsonify({"status": "match", "student_number": sn, "name": lcd_name, "attendance_status": status})
-    
     else:
-        # 4. UNKNOWN FACE
         try: requests.get(f"http://{ESP32_IP}/update_lcd?message=Unknown%20Face|Access%20Denied", timeout=0.5)
         except: pass
         return jsonify({"status": "unknown"})
+
+@app.route("/export_session")
+def export_session():
+    if "professor_id" not in session: return "Unauthorized", 403
+    cid, t_date = request.args.get("class_id"), request.args.get("date")
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["Student Number", "Last Name", "First Name", "Middle Name", "Status", "Time In", "Date"])
+    students = get_class_students_with_details(cid)
+    with sqlite3.connect(DB) as c:
+        raw_att = c.cursor().execute("SELECT student_number, status, timestamp FROM attendance WHERE class_id=? AND timestamp LIKE ?", (cid, f"{t_date}%")).fetchall()
+        att_details = {r[0]: {'status': r[1], 'time': r[2]} for r in raw_att}
+    for row in students:
+        sn, ln, fn, mn, _ = row
+        record = att_details.get(sn, {'status': 'ABSENT', 'time': '-'})
+        cw.writerow([sn, ln, fn, mn, record['status'].upper(), record['time'], t_date])
+    out = make_response(si.getvalue())
+    out.headers["Content-Disposition"] = f"attachment; filename=attendance_{t_date}.csv"
+    out.headers["Content-type"] = "text/csv"
+    return out
+
+@app.route("/export_course")
+def export_course():
+    if "professor_id" not in session: return "Unauthorized", 403
+    cid = request.args.get("class_id")
+    si = StringIO()
+    cw = csv.writer(si)
+    with sqlite3.connect(DB) as c:
+        info = c.cursor().execute("SELECT name, day, start_date, end_date FROM classes WHERE id=?", (cid,)).fetchone()
+        if not info: return "Incomplete Class Info", 400
+        name, day, sd, ed = info
+        total_possible = count_past_classes(day, sd, ed)
+        cw.writerow([f"Class: {name}"]); cw.writerow([f"Total Sessions: {total_possible}"]); cw.writerow([])
+        cw.writerow(["Student Number", "Name", "Present", "Late", "Absent", "Attendance %"])
+        students = get_class_students_with_details(cid)
+        for row in students:
+            sn, ln, fn, mn, _ = row
+            full_name = f"{ln}, {fn} {mn}"
+            recs = c.cursor().execute("SELECT status FROM attendance WHERE class_id=? AND student_number=?", (cid, sn)).fetchall()
+            pres = sum(1 for r in recs if r[0].lower()=='on_time')
+            late = sum(1 for r in recs if r[0].lower()=='late')
+            absent = max(0, total_possible - (pres + late))
+            pct = ((pres+late)/total_possible*100) if total_possible>0 else 0
+            cw.writerow([sn, full_name, pres, late, absent, f"{pct:.1f}%"])
+    out = make_response(si.getvalue())
+    out.headers["Content-Disposition"] = f"attachment; filename=summary_{name}.csv"
+    out.headers["Content-type"] = "text/csv"
+    return out
 
 if __name__ == "__main__":
     init_db()
