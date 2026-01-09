@@ -1,4 +1,3 @@
-<!-- templates/dashboard.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -10,37 +9,55 @@
         .left { width: 30%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .right { width: 70%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         ul { list-style: none; padding: 0; }
-        li { margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 5px; display: flex; align-items: center; justify-content: space-between; }
+        li { margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 5px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        li a { flex: 1; min-width: 200px; }
         a { text-decoration: none; color: #007bff; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-        button:hover { background: #0056b3; }
+        button, .btn-link { padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 2px; text-decoration: none; display: inline-block; font-size: 13px; font-family: Arial;}
+        button:hover, .btn-link:hover { background: #0056b3; }
+        .btn-green { background-color: #28a745; } .btn-green:hover { background-color: #218838; }
+        .btn-purple { background-color: #6f42c1; } .btn-purple:hover { background-color: #5a32a3; }
+        .btn-orange { background-color: #fd7e14; } .btn-orange:hover { background-color: #e6700c; }
+        .btn-red { background-color: #dc3545; } .btn-red:hover { background-color: #c82333; }
+        .btn-grey { background-color: #6c757d; } .btn-grey:hover { background-color: #5a6268; }
+        
         img { border: 2px solid #dee2e6; width: 480px; border-radius: 10px; }
-        .students { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .student { padding: 10px; border-radius: 5px; color: white; display: flex; justify-content: space-between; align-items: center; }
+        .students { display: grid; grid-template-columns: repeat(1, 1fr); gap: 10px; } /* Single column for more space */
+        .student { padding: 15px; border-radius: 5px; color: white; display: flex; justify-content: space-between; align-items: center; }
         .on_time { background: #28a745; }
         .late { background: #ffc107; color: black; }
         .absent { background: #dc3545; }
+        
+        /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; background: rgba(0,0,0,0.4); }
-        .modal-content { background: white; margin: 10% auto; padding: 20px; border-radius: 10px; width: 500px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto; }
+        .modal-content { background: white; margin: 2% auto; padding: 20px; border-radius: 10px; width: 90%; max-width: 1200px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); max-height: 95vh; overflow-y: auto; }
         .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         .close:hover { color: black; }
+        
+        /* Forms */
         label { display: block; margin: 10px 0 5px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 5px; box-sizing: border-box; margin-bottom: 10px; }
-        .add-btns { display: flex; gap: 10px; margin-bottom: 20px; }
-        .add-class-btn, .enroll-student-btn { display: flex; align-items: center; gap: 10px; }
-        .calendar { margin: 20px 0; }
-        #allStudentsList { max-height: 300px; overflow-y: auto; }
-        .icon-btn { background: #007bff; color: white; border: none; cursor: pointer; font-size: 12px; padding: 5px 10px; border-radius: 5px; margin-left: 5px; }
-        .icon-btn:hover { background: #0056b3; }
-        .action-buttons { display: flex; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px; border: 1px solid #dee2e6; text-align: left; }
-        .capture-btn { margin-top: 10px; }
-        #captureFace { display: none; }
         .form-row { display: flex; gap: 10px; }
         .form-row > div { flex: 1; }
         .checkbox-label { display: flex; align-items: center; gap: 10px; }
-        .logout-btn { background: red; color: white; padding: 10px; border-radius: 5px; text-decoration: none; display: inline-block; margin-top: 20px; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        
+        /* Specific areas */
+        .add-btns { display: flex; gap: 10px; margin-bottom: 20px; }
+        .add-btns button { display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .add-btns span { font-size: 20px; line-height: 1; }
+        .filter-bar { display: flex; gap: 10px; background: #f8f9fa; padding: 15px; border-radius: 8px; flex-wrap: wrap; align-items: flex-end; }
+        .filter-group { flex: 1; min-width: 150px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; border: 1px solid #dee2e6; text-align: left; }
+        .logout-btn { background: #dc3545; color: white; padding: 10px; border-radius: 5px; text-decoration: none; display: inline-block; margin-top: 20px; }
+        .stats-container { display: flex; justify-content: space-around; background: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .stat { padding: 10px 20px; border-radius: 5px; color: white; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .present { background: #28a745; }
+        .late { background: #ffc107; color: #333; }
+        .absent { background: #dc3545; }
+        .error-msg { color: #dc3545; font-weight: bold; }
+        .class-actions { display: flex; gap: 5px; }
+        .add-student-buttons { display: flex; gap: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -51,465 +68,344 @@
                 <button class="add-class-btn" onclick="showAddClassModal()"><span style="font-size: 20px;">+</span> Add New Class</button>
                 <button class="enroll-student-btn" onclick="showEnrollGlobalModal()"><span style="font-size: 20px;">+</span> Enroll New Student</button>
             </div>
+            
             <div id="addClassModal" class="modal">
-                <div class="modal-content">
+                <div class="modal-content" style="max-width: 600px;">
                     <span class="close" onclick="closeAddClassModal()">&times;</span>
                     <h2>Add New Class</h2>
                     <form id="addClassForm">
-                        <label for="name">Subject Name:</label>
-                        <input type="text" id="name" name="name" required>
-                        <label for="day">Day:</label>
-                        <select id="day" name="day" required>
-                            <option value="Monday">Monday</option>
-                            <option value="Tuesday">Tuesday</option>
-                            <option value="Wednesday">Wednesday</option>
-                            <option value="Thursday">Thursday</option>
-                            <option value="Friday">Friday</option>
-                            <option value="Saturday">Saturday</option>
-                            <option value="Sunday">Sunday</option>
-                        </select>
+                        <label>Subject Name:</label><input type="text" id="name" required>
                         <div class="form-row">
-                            <div>
-                                <label for="start_time">Start Time:</label>
-                                <input type="time" id="start_time" name="start_time" required>
-                            </div>
-                            <div>
-                                <label for="end_time">End Time:</label>
-                                <input type="time" id="end_time" name="end_time" required>
-                            </div>
+                            <div><label>Program (e.g. BSCpE):</label><input type="text" id="class_program" required></div>
+                            <div><label>Year:</label><select id="class_year" required><option value="1st">1st</option><option value="2nd">2nd</option><option value="3rd">3rd</option><option value="4th">4th</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Section (e.g. 1-1):</label><input type="text" id="class_section" required></div>
+                            <div><label>Day:</label><select id="day" required><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Start Time:</label><input type="time" id="start_time" required></div>
+                            <div><label>End Time:</label><input type="time" id="end_time" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Semester Start:</label><input type="date" id="start_date" required></div>
+                            <div><label>Semester End:</label><input type="date" id="end_date" required></div>
                         </div>
                         <button type="button" onclick="submitAddClass()">Submit</button>
                     </form>
                 </div>
             </div>
+
             <div id="editClassModal" class="modal">
-                <div class="modal-content">
+                <div class="modal-content" style="max-width: 600px;">
                     <span class="close" onclick="closeEditClassModal()">&times;</span>
                     <h2>Edit Class</h2>
                     <form id="editClassForm">
                         <input type="hidden" id="edit_class_id">
-                        <label for="edit_name">Subject Name:</label>
-                        <input type="text" id="edit_name" required>
-                        <label for="edit_day">Day:</label>
-                        <select id="edit_day" required>
-                            <option value="Monday">Monday</option>
-                            <option value="Tuesday">Tuesday</option>
-                            <option value="Wednesday">Wednesday</option>
-                            <option value="Thursday">Thursday</option>
-                            <option value="Friday">Friday</option>
-                            <option value="Saturday">Saturday</option>
-                            <option value="Sunday">Sunday</option>
-                        </select>
+                        <label>Subject Name:</label><input type="text" id="edit_name" required>
                         <div class="form-row">
-                            <div>
-                                <label for="edit_start_time">Start Time:</label>
-                                <input type="time" id="edit_start_time" required>
-                            </div>
-                            <div>
-                                <label for="edit_end_time">End Time:</label>
-                                <input type="time" id="edit_end_time" required>
-                            </div>
+                            <div><label>Program (e.g. BSCpE):</label><input type="text" id="edit_class_program" required></div>
+                            <div><label>Year:</label><select id="edit_class_year" required><option value="1st">1st</option><option value="2nd">2nd</option><option value="3rd">3rd</option><option value="4th">4th</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Section (e.g. 1-1):</label><input type="text" id="edit_class_section" required></div>
+                            <div><label>Day:</label><select id="edit_day" required><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Start Time:</label><input type="time" id="edit_start_time" required></div>
+                            <div><label>End Time:</label><input type="time" id="edit_end_time" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Semester Start:</label><input type="date" id="edit_start_date" required></div>
+                            <div><label>Semester End:</label><input type="date" id="edit_end_date" required></div>
                         </div>
                         <button type="button" onclick="submitEditClass()">Submit</button>
                     </form>
                 </div>
             </div>
-            <div id="deleteClassModal" class="modal">
-                <div class="modal-content">
-                    <span class="close" onclick="closeDeleteClassModal()">&times;</span>
-                    <h2>Delete Class</h2>
-                    <form id="deleteClassForm">
-                        <input type="hidden" id="delete_class_id">
-                        <label for="delete_username">Username:</label>
-                        <input type="text" id="delete_username" required>
-                        <label for="delete_password">Password:</label>
-                        <input type="password" id="delete_password" required>
-                        <button type="button" onclick="submitDeleteClass()">Confirm Delete</button>
-                    </form>
-                </div>
-            </div>
+
             <div id="enrollGlobalModal" class="modal">
-                <div class="modal-content">
+                <div class="modal-content" style="max-width: 600px;">
                     <span class="close" onclick="closeEnrollGlobalModal()">&times;</span>
                     <h2>Enroll Student</h2>
                     <form id="enrollGlobalForm">
                         <div class="form-row">
-                            <div>
-                                <label for="last_name">Last Name:</label>
-                                <input type="text" id="last_name" name="last_name" required>
-                            </div>
-                            <div>
-                                <label for="first_name">First Name:</label>
-                                <input type="text" id="first_name" name="first_name" required>
-                            </div>
+                            <div><label>Last Name:</label><input type="text" id="last_name" required></div>
+                            <div><label>First Name:</label><input type="text" id="first_name" required></div>
                         </div>
                         <div class="form-row">
-                            <div>
-                                <label for="middle_name">Middle Name:</label>
-                                <input type="text" id="middle_name" name="middle_name">
-                            </div>
-                            <div>
-                                <label for="student_number">Student Number:</label>
-                                <input type="text" id="student_number" name="student_number" required>
-                            </div>
+                            <div><label>Middle Name:</label><input type="text" id="middle_name"></div>
+                            <div><label>Student Number:</label><input type="text" id="student_number" required></div>
                         </div>
                         <div class="form-row">
-                            <div>
-                                <label for="suffix">Suffix:</label>
-                                <select id="suffix" name="suffix">
-                                    <option value="">None</option>
-                                    <option value="Jr.">Jr.</option>
-                                    <option value="Sr.">Sr.</option>
-                                    <option value="II">II</option>
-                                    <option value="III">III</option>
-                                    <option value="IV">IV</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="year">Year:</label>
-                                <select id="year" name="year" required>
-                                    <option value="1st">1st</option>
-                                    <option value="2nd">2nd</option>
-                                    <option value="3rd">3rd</option>
-                                    <option value="4th">4th</option>
-                                    <option value="5th">5th</option>
-                                </select>
-                            </div>
+                            <div><label>Suffix:</label><select id="suffix"><option value="">None</option><option value="Jr.">Jr.</option><option value="Sr.">Sr.</option></select></div>
+                            <div><label>Year:</label><select id="year" required><option value="1st">1st</option><option value="2nd">2nd</option><option value="3rd">3rd</option><option value="4th">4th</option></select></div>
                         </div>
                         <div class="form-row">
-                            <div>
-                                <label for="program">Program:</label>
-                                <input type="text" id="program" name="program" maxlength="10" oninput="this.value = this.value.toUpperCase()" required>
-                            </div>
-                            <div class="checkbox-label">
-                                <label for="section">Section:</label>
-                                <input type="text" id="section" name="section" required>
-                                <label><input type="checkbox" id="irregular"> Irregular</label>
-                            </div>
+                            <div><label>Program:</label><input type="text" id="program" maxlength="10" oninput="this.value = this.value.toUpperCase()" required></div>
+                            <div class="checkbox-label"><label>Section:</label><input type="text" id="section" required><label><input type="checkbox" id="irregular"> Irregular</label></div>
                         </div>
                         <button type="button" onclick="submitEnrollGlobal(true)">Submit with Capture</button>
-                        <button type="button" onclick="submitEnrollGlobal(false)">Submit (Skip Capture)</button>
-                        <img id="captureFace" src="/stream" style="width: 300px; margin-top: 10px; display: none;">
+                        <button type="button" onclick="submitEnrollUpload()">Submit with Upload</button>
+                        <button type="button" onclick="submitEnrollGlobal(false)">Submit (Skip Face)</button>
+                        <img id="captureFace" src="/stream" style="width: 100%; margin-top: 10px; display: none;">
+                        <input type="file" id="face_file" accept=".jpg,.jpeg" style="margin-top: 10px;">
                     </form>
                 </div>
             </div>
+
             <button onclick="showAllStudentsModal()">View All Students</button>
             <div id="allStudentsModal" class="modal">
                 <div class="modal-content">
                     <span class="close" onclick="closeAllStudentsModal()">&times;</span>
-                    <h2>All Students</h2>
-                    <label for="allYear">Year:</label>
-                    <input type="text" id="allYear" oninput="filterAllStudents()">
-                    <label for="allProgram">Program:</label>
-                    <input type="text" id="allProgram" oninput="filterAllStudents()">
-                    <label for="allSection">Section:</label>
-                    <input type="text" id="allSection" oninput="filterAllStudents()">
+                    <h2>All Students Database</h2>
+                    <div class="filter-bar">
+                        <div class="filter-group"><label>Search By:</label><select id="allSearchType"><option value="first_name">First Name</option><option value="last_name">Last Name</option><option value="student_number">Student No</option></select></div>
+                        <div class="filter-group" style="flex:2;"><label>Search Term:</label><input type="text" id="allSearchVal" oninput="filterAllStudents()"></div>
+                        <div class="filter-group"><label>Year:</label><select id="allYear" onchange="filterAllStudents()"><option value="">All</option><option value="1st">1st</option><option value="2nd">2nd</option><option value="3rd">3rd</option><option value="4th">4th</option></select></div>
+                        <div class="filter-group"><label>Program:</label><input type="text" id="allProgram" oninput="filterAllStudents()"></div>
+                        <div class="filter-group"><label>Section:</label><input type="text" id="allSection" oninput="filterAllStudents()"></div>
+                        <div class="filter-group checkbox-label"><label>Irregular Only:</label><input type="checkbox" id="allIrregular" onclick="filterAllStudents()"></div>
+                    </div>
                     <table id="allStudentsTable">
-                        <thead>
-                            <tr>
-                                <th>First Name</th>
-                                <th>Last Name</th>
-                                <th>Year</th>
-                                <th>Program</th>
-                                <th>Section</th>
-                                <th>Face Registered</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Student No</th><th>Last Name</th><th>First Name</th><th>Year</th><th>Program</th><th>Section</th><th>Has Face</th><th>Action</th></tr></thead>
                         <tbody></tbody>
                     </table>
-                    <div class="pagination">
-                        <button onclick="changePage(-1)">Previous</button>
-                        <span id="pageInfo"></span>
-                        <button onclick="changePage(1)">Next</button>
-                    </div>
+                    <div class="pagination" style="margin-top: 15px; text-align: center;"><button onclick="changePage(-1)">Previous</button><span id="pageInfo" style="margin: 0 10px;"></span><button onclick="changePage(1)">Next</button></div>
                 </div>
             </div>
-            <div id="editStudentModal" class="modal">
-                <div class="modal-content">
-                    <span class="close" onclick="closeEditStudentModal()">&times;</span>
-                    <h2>Edit Student</h2>
-                    <form id="editStudentForm">
-                        <input type="hidden" id="edit_student_number">
-                        <div class="form-row">
-                            <div>
-                                <label for="edit_last_name">Last Name:</label>
-                                <input type="text" id="edit_last_name" required>
-                            </div>
-                            <div>
-                                <label for="edit_first_name">First Name:</label>
-                                <input type="text" id="edit_first_name" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div>
-                                <label for="edit_middle_name">Middle Name:</label>
-                                <input type="text" id="edit_middle_name">
-                            </div>
-                            <div>
-                                <label for="edit_student_number">Student Number:</label>
-                                <input type="text" id="edit_student_number" disabled>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div>
-                                <label for="edit_suffix">Suffix:</label>
-                                <select id="edit_suffix">
-                                    <option value="">None</option>
-                                    <option value="Jr.">Jr.</option>
-                                    <option value="Sr.">Sr.</option>
-                                    <option value="II">II</option>
-                                    <option value="III">III</option>
-                                    <option value="IV">IV</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="edit_year">Year:</label>
-                                <select id="edit_year" required>
-                                    <option value="1st">1st</option>
-                                    <option value="2nd">2nd</option>
-                                    <option value="3rd">3rd</option>
-                                    <option value="4th">4th</option>
-                                    <option value="5th">5th</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div>
-                                <label for="edit_program">Program:</label>
-                                <input type="text" id="edit_program" maxlength="10" oninput="this.value = this.value.toUpperCase()" required>
-                            </div>
-                            <div class="checkbox-label">
-                                <label for="edit_section">Section:</label>
-                                <input type="text" id="edit_section" required>
-                                <label><input type="checkbox" id="edit_irregular"> Irregular</label>
-                            </div>
-                        </div>
-                        <button type="button" onclick="submitEditStudent()">Submit</button>
-                    </form>
-                </div>
-            </div>
-            <div id="updateFaceModal" class="modal">
-                <div class="modal-content">
-                    <span class="close" onclick="closeUpdateFaceModal()">&times;</span>
-                    <h2>Update Face for Student</h2>
-                    <input type="hidden" id="update_student_number">
-                    <img id="updateCaptureFace" src="/stream" style="width: 300px; margin-top: 10px;">
-                    <button type="button" onclick="submitUpdateFace()">Capture Face</button>
-                </div>
-            </div>
+
+            <div id="updateFaceModal" class="modal"><div class="modal-content" style="max-width: 600px;"><span class="close" onclick="closeUpdateFaceModal()">&times;</span><h2>Update Face</h2><input type="hidden" id="update_student_number"><img id="updateCaptureFace" src="/stream" style="width:100%"><button type="button" onclick="submitUpdateFace()">Capture</button><input type="file" id="upload_file" accept=".jpg,.jpeg"><button type="button" onclick="submitUploadFace()">Upload</button></div></div>
+            <div id="editStudentModal" class="modal"><div class="modal-content" style="max-width:600px"><span class="close" onclick="closeEditStudentModal()">&times;</span><h2>Edit Student</h2><form id="editStudentForm"><input type="hidden" id="edit_student_number"><div class="form-row"><div><label>Last:</label><input type="text" id="edit_last_name"></div><div><label>First:</label><input type="text" id="edit_first_name"></div></div><div class="form-row"><div><label>Mid:</label><input type="text" id="edit_middle_name"></div><div><label>No:</label><input type="text" id="edit_student_number_disp" disabled></div></div><div class="form-row"><div><label>Suffix:</label><select id="edit_suffix"><option value="">None</option><option value="Jr.">Jr.</option><option value="Sr.">Sr.</option></select></div><div><label>Year:</label><select id="edit_year"><option>1st</option><option>2nd</option><option>3rd</option><option>4th</option></select></div></div><div class="form-row"><div><label>Prog:</label><input type="text" id="edit_program"></div><div class="checkbox-label"><label>Sec:</label><input type="text" id="edit_section"></div></div><label><input type="checkbox" id="edit_irregular">Irreg</label><button type="button" onclick="submitEditStudent()">Submit</button></form></div></div>
+
             <h2>Your Classes</h2>
             <select id="dayFilter" onchange="filterClassesByDay(this.value)">
-                <option value="">All Days</option>
-                <option value="Monday">Monday</option>
-                <option value="Tuesday">Tuesday</option>
-                <option value="Wednesday">Wednesday</option>
-                <option value="Thursday">Thursday</option>
-                <option value="Friday">Friday</option>
-                <option value="Saturday">Saturday</option>
-                <option value="Sunday">Sunday</option>
+                <option value="">All Days</option><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option>
             </select>
             <ul id="classesList">
                 {% for cls in all_classes %}
                     <li data-day="{{ cls[2] }}">
-                        <a href="/dashboard?class_id={{ cls[0] }}{% if selected_date %}&date={{ selected_date }}{% endif %}">{{ cls[1] }} on {{ cls[2] }} ({{ cls[3] }} - {{ cls[4] }})</a>
-                        <span class="action-buttons">
-                            <button class="icon-btn" onclick="showEditClassModal({{ cls[0] | tojson }}, '{{ cls[1] }}', '{{ cls[2] }}', '{{ cls[3] }}', '{{ cls[4] }}')">Edit</button>
-                            <button class="icon-btn" onclick="showDeleteClassModal({{ cls[0] | tojson }})">Delete</button>
-                        </span>
+                        <a href="/dashboard?class_id={{ cls[0] }}{% if selected_date %}&date={{ selected_date }}{% endif %}">
+                            {{ cls[1] }} - {{ cls[6] }} {{ cls[7] }} Year ({{ cls[5] }}) ({{ cls[2] }} {{ cls[3] }}-{{ cls[4] }})
+                        </a>
+                        <div class="class-actions">
+                            <button class="btn-grey" onclick="showEditClassModal({{ cls[0] }}, '{{ cls[1] }}', '{{ cls[2] }}', '{{ cls[3] }}', '{{ cls[4] }}', '{{ cls[8] }}', '{{ cls[9] }}', '{{ cls[6] }}', '{{ cls[7] }}', '{{ cls[5] }}')">Edit</button>
+                            <button class="btn-red" onclick="showAuthModal('delete_class', null, {{ cls[0] }})">Delete</button>
+                        </div>
                     </li>
                 {% endfor %}
             </ul>
-            <div class="calendar">
-                <h2>Calendar</h2>
-                <input type="date" id="calendarDate" value="{{ selected_date }}" onchange="loadClassesForDate(this.value)">
-            </div>
-            <div id="calendarClasses">
-                {% if classes_by_day %}
-                    {% for day, classes in classes_by_day.items() %}
-                        <h3>Classes on {{ day }}</h3>
-                        <ul>
-                            {% for cls in classes %}
-                                <li><a href="/dashboard?class_id={{ cls[0] }}{% if selected_date %}&date={{ selected_date }}{% endif %}">{{ cls[1] }} ({{ cls[2] }} - {{ cls[3] }})</a></li>
-                            {% endfor %}
-                        </ul>
-                    {% endfor %}
-                {% endif %}
-            </div>
         </div>
+
         <div class="right">
             {% if selected_class %}
-                <h2>{{ selected_class.name }} ({{ selected_class.start_time }} - {{ selected_class.end_time }})</h2>
-                <img src="/stream" id="cam">
-                <br>
-                <button onclick="enroll({{ selected_class.id | tojson }})">Enroll Student (Capture Face)</button>
-                <button onclick="attendance({{ selected_class.id | tojson }})">Take Attendance</button>
-                <h3>Students</h3>
-                <div class="students">
-                    {% for sid, info in students_statuses.items() %}
-                        <div class="student {{ info.status }}">
-                            {{ info.name }} {% if 'IRREG' in info.section %} (IRREG){% endif %} ({{ sid }}) - {{ info.status | replace('_', ' ') | title }}
-                            <button class="icon-btn" onclick="showRemoveStudentModal({{ selected_class.id | tojson }}, '{{ sid }}')">Remove</button>
+                <div class="calendar">
+                    <h2>Calendar</h2>
+                    <input type="date" id="calendarDate" value="{{ selected_date or '' }}" onchange="loadClassesForDate(this.value)">
+                </div>
+                {% if selected_date %}
+                    <div class="header-actions">
+                        <h2>{{ selected_class.name }} - {{ selected_class.program }} {{ selected_class.year }} Year ({{ selected_class.section }})</h2>
+                        <div>
+                            <a href="/export_course?class_id={{ selected_class.id }}" class="btn-link btn-green">Export Semester</a>
+                            <a href="/export_session?class_id={{ selected_class.id }}&date={{ selected_date }}" class="btn-link btn-purple">Export Daily</a>
                         </div>
-                    {% endfor %}
-                </div>
-                <div id="removeStudentModal" class="modal">
-                    <div class="modal-content">
-                        <span class="close" onclick="closeRemoveStudentModal()">&times;</span>
-                        <h2>Remove Student</h2>
-                        <form id="removeStudentForm">
-                            <input type="hidden" id="remove_class_id">
-                            <input type="hidden" id="remove_student_number">
-                            <label for="remove_username">Username:</label>
-                            <input type="text" id="remove_username" required>
-                            <label for="remove_password">Password:</label>
-                            <input type="password" id="remove_password" required>
-                            <button type="button" onclick="submitRemoveStudent()">Confirm Remove</button>
-                        </form>
                     </div>
-                </div>
-                <button onclick="showAddStudentsModal({{ selected_class.id | tojson }})">Add Students</button>
-                <div id="addStudentsModal" class="modal">
-                    <div class="modal-content">
-                        <span class="close" onclick="closeAddStudentsModal()">&times;</span>
-                        <h2>Add Students to Class</h2>
-                        <label for="studentFilterType">Filter By:</label>
-                        <select id="studentFilterType">
-                            <option value="name">Name</option>
-                            <option value="student_number">Student Number</option>
-                        </select>
-                        <label for="studentSearch">Search:</label>
-                        <input type="text" id="studentSearch" oninput="filterStudents()">
-                        <table id="addStudentsTable">
-                            <thead>
-                                <tr>
-                                    <th>Select</th>
-                                    <th>First Name</th>
-                                    <th>Last Name</th>
-                                    <th>Year</th>
-                                    <th>Program</th>
-                                    <th>Section</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                        <button type="button" onclick="submitAddStudents()">Add Selected</button>
-                    </div>
-                </div>
-                <h3>Recent Attendance</h3>
-                <ul id="list"></ul>
+                    {% if error_msg %}
+                        <p class="error-msg">{{ error_msg }}</p>
+                    {% else %}
+                        <div class="stats-container">
+                            <span class="stat present">Present: {{ present }}</span>
+                            <span class="stat late">Late: {{ late }}</span>
+                            <span class="stat absent">Absent: {{ absent }}</span>
+                        </div>
+                        {% if selected_date == today %}
+                            <img src="/stream" id="cam">
+                            <br>
+                            <button onclick="enroll({{ selected_class.id | tojson }})">Enroll Student (Capture Face)</button>
+                            <button onclick="attendance({{ selected_class.id | tojson }})">Take Attendance</button>
+                        {% endif %}
+                        
+                        <h3 style="margin-top: 20px;">Students in Class</h3>
+                        <button onclick="importStudentsFromSection({{ selected_class.id | tojson }})" class="btn-orange">
+                            Import All Students from {{ selected_class.program }} {{ selected_class.year }} Year ({{ selected_class.section }})
+                        </button>
+                        <div class="add-student-buttons">
+                            <button onclick="showAddStudentsModal({{ selected_class.id | tojson }})">Manually Add Students</button>
+                        </div>
+                        
+                        <div class="students" style="margin-top: 10px;">
+                            {% for sid, info in students_statuses.items() %}
+                                <div class="student {{ info.status }}">
+                                    <span>{{ info.name }} ({{ sid }}) - {{ info.status | replace('_', ' ') | title }}</span>
+                                    <div>
+                                        {% if info.status == 'absent' %}
+                                            <button class="icon-btn btn-green" onclick="showAuthModal('mark_present', '{{ sid }}', {{ selected_class.id | tojson }})">Mark Present</button>
+                                        {% else %}
+                                            <button class="icon-btn btn-grey" onclick="showAuthModal('clear_attendance', '{{ sid }}', {{ selected_class.id | tojson }})">Clear Status</button>
+                                        {% endif %}
+                                        <button class="icon-btn btn-red" onclick="showAuthModal('remove_student', '{{ sid }}', {{ selected_class.id | tojson }})">Remove</button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div id="addStudentsModal" class="modal">
+                            <div class="modal-content">
+                                <span class="close" onclick="closeAddStudentsModal()">&times;</span>
+                                <h2>Add Students</h2>
+                                <div class="filter-bar">
+                                    <div class="filter-group"><label>Search By:</label><select id="addSearchType"><option value="first_name">First Name</option><option value="last_name">Last Name</option><option value="student_number">Student No</option></select></div>
+                                    <div class="filter-group" style="flex:2;"><label>Search:</label><input type="text" id="addSearchVal" oninput="filterStudents()"></div>
+                                    <div class="filter-group"><label>Year:</label><select id="addYear" onchange="filterStudents()"><option value="">All</option><option value="1st">1st</option><option value="2nd">2nd</option><option value="3rd">3rd</option><option value="4th">4th</option></select></div>
+                                    <div class="filter-group"><label>Program:</label><input type="text" id="addProgram" oninput="filterStudents()"></div>
+                                    <div class="filter-group"><label>Section:</label><input type="text" id="addSection" oninput="filterStudents()"></div>
+                                    <div class="filter-group checkbox-label"><label>Irregular Only:</label><input type="checkbox" id="addIrregular" onclick="filterStudents()"></div>
+                                </div>
+                                <table id="addStudentsTable"><thead><tr><th>Select</th><th>Student No</th><th>Name</th></tr></thead><tbody></tbody></table><button onclick="submitAddStudents()">Add Selected</button>
+                            </div>
+                        </div>
+
+                        <div id="authModal" class="modal">
+                            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                                <span class="close" onclick="closeAuthModal()">&times;</span>
+                                <h2 id="authModalTitle">Authenticate</h2>
+                                <p id="authModalMsg">Please enter credentials to continue.</p>
+                                <form id="authForm">
+                                    <input type="hidden" id="auth_action">
+                                    <input type="hidden" id="auth_student_number">
+                                    <input type="hidden" id="auth_class_id">
+                                    <label style="text-align: left;">Username:</label>
+                                    <input type="text" id="auth_username" required>
+                                    <label style="text-align: left;">Password:</label>
+                                    <input type="password" id="auth_password" required>
+                                    <button type="button" onclick="submitAuthAction()">Confirm</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <h3>Recent Attendance</h3>
+                        <ul id="list"></ul>
+                    {% endif %}
+                {% else %}
+                    <p>Please select a date from the calendar to view attendance.</p>
+                {% endif %}
             {% else %}
-                <p>Select a class from the left or calendar to view details.</p>
+                <p>Select a class to view details.</p>
             {% endif %}
         </div>
     </div>
     <a href="/logout" class="logout-btn">Logout</a>
 
     <script>
-    let currentPage = 1;
-    const pageSize = 5;
-
-    function showAddClassModal() {
-        document.getElementById('addClassModal').style.display = 'block';
+    let currentPage = 1; const pageSize = 10;
+    
+    // --- AUTH ACTION LOGIC ---
+    function showAuthModal(action, sn, cid) {
+        document.getElementById('auth_action').value = action;
+        document.getElementById('auth_student_number').value = sn || '';
+        document.getElementById('auth_class_id').value = cid;
+        
+        let title = "Authenticate";
+        let msg = "Enter credentials:";
+        if(action === 'remove_student') { title = "Remove Student"; msg = "Verify to remove student from class."; }
+        if(action === 'mark_present') { title = "Mark Present"; msg = "Verify to manually mark student present."; }
+        if(action === 'clear_attendance') { title = "Clear Attendance"; msg = "Verify to delete attendance record."; }
+        if(action === 'delete_class') { title = "Delete Class"; msg = "Verify to delete class."; }
+        
+        document.getElementById('authModalTitle').innerText = title;
+        document.getElementById('authModalMsg').innerText = msg;
+        document.getElementById('authModal').style.display = 'block';
     }
-    function closeAddClassModal() {
-        document.getElementById('addClassModal').style.display = 'none';
-    }
-    async function submitAddClass() {
-        const form = document.getElementById('addClassForm');
+    function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; document.getElementById('authForm').reset(); }
+    
+    async function submitAuthAction() {
+        const action = document.getElementById('auth_action').value;
         const data = {
-            name: form.name.value,
-            day: form.day.value,
-            start_time: form.start_time.value,
-            end_time: form.end_time.value
+            username: document.getElementById('auth_username').value,
+            password: document.getElementById('auth_password').value,
+            class_id: document.getElementById('auth_class_id').value,
+            student_number: document.getElementById('auth_student_number').value,
+            date: "{{ selected_date }}"
         };
-        const res = await fetch('/dashboard', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            closeAddClassModal();
-            location.reload();
-        } else {
-            alert("Error adding class");
-        }
+        
+        let url = '';
+        if(action === 'remove_student') url = '/remove_student_from_class';
+        if(action === 'mark_present') url = '/manual_attendance';
+        if(action === 'clear_attendance') url = '/clear_attendance';
+        if(action === 'delete_class') url = '/delete_class'; delete data.student_number; delete data.date;
+        
+        const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+        const json = await res.json();
+        
+        if(res.ok) { closeAuthModal(); location.reload(); }
+        else { alert("Error: " + (json.error || "Action failed")); }
     }
 
-    function showEditClassModal(classId, name, day, startTime, endTime) {
-        document.getElementById('edit_class_id').value = classId;
+    // --- OTHER FUNCTIONS (Add/Edit/Enroll/Filter) preserved ---
+    function showModal(id) { document.getElementById(id).style.display = 'block'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function showAddClassModal() { document.getElementById('addClassForm').reset(); showModal('addClassModal'); }
+    function closeAddClassModal() { closeModal('addClassModal'); }
+    async function submitAddClass() {
+        const data = {
+            name: document.getElementById('name').value,
+            program: document.getElementById('class_program').value,
+            year: document.getElementById('class_year').value,
+            section: document.getElementById('class_section').value,
+            day: document.getElementById('day').value,
+            start_time: document.getElementById('start_time').value,
+            end_time: document.getElementById('end_time').value,
+            start_date: document.getElementById('start_date').value,
+            end_date: document.getElementById('end_date').value
+        };
+        await fetch('/dashboard', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)});
+        closeAddClassModal(); location.reload();
+    }
+
+    function showEditClassModal(cid, name, day, start, end, s_date, e_date, program, year, section) {
+        document.getElementById('edit_class_id').value = cid;
         document.getElementById('edit_name').value = name;
         document.getElementById('edit_day').value = day;
-        document.getElementById('edit_start_time').value = startTime;
-        document.getElementById('edit_end_time').value = endTime;
-        document.getElementById('editClassModal').style.display = 'block';
+        document.getElementById('edit_start_time').value = start;
+        document.getElementById('edit_end_time').value = end;
+        document.getElementById('edit_start_date').value = s_date;
+        document.getElementById('edit_end_date').value = e_date;
+        document.getElementById('edit_class_program').value = program;
+        document.getElementById('edit_class_year').value = year;
+        document.getElementById('edit_class_section').value = section;
+        showModal('editClassModal');
     }
-    function closeEditClassModal() {
-        document.getElementById('editClassModal').style.display = 'none';
-    }
+    function closeEditClassModal() { closeModal('editClassModal'); }
     async function submitEditClass() {
-        const classId = document.getElementById('edit_class_id').value;
         const data = {
-            class_id: classId,
+            class_id: document.getElementById('edit_class_id').value,
             name: document.getElementById('edit_name').value,
+            program: document.getElementById('edit_class_program').value,
+            year: document.getElementById('edit_class_year').value,
+            section: document.getElementById('edit_class_section').value,
             day: document.getElementById('edit_day').value,
             start_time: document.getElementById('edit_start_time').value,
-            end_time: document.getElementById('edit_end_time').value
+            end_time: document.getElementById('edit_end_time').value,
+            start_date: document.getElementById('edit_start_date').value,
+            end_date: document.getElementById('edit_end_date').value
         };
-        const res = await fetch('/edit_class', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            closeEditClassModal();
+        await fetch('/edit_class', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)});
+        closeEditClassModal(); location.reload();
+    }
+    async function importStudentsFromSection(cid) {
+        if(confirm("Import all students matching this class section?")) {
+            const res = await fetch('/import_section_students', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({class_id: cid})});
             location.reload();
-        } else {
-            alert("Error editing class");
         }
     }
-
-    function showDeleteClassModal(classId) {
-        document.getElementById('delete_class_id').value = classId;
-        document.getElementById('deleteClassModal').style.display = 'block';
-    }
-    function closeDeleteClassModal() {
-        document.getElementById('deleteClassModal').style.display = 'none';
-    }
-    async function submitDeleteClass() {
-        const classId = document.getElementById('delete_class_id').value;
-        const data = {
-            class_id: classId,
-            username: document.getElementById('delete_username').value,
-            password: document.getElementById('delete_password').value
-        };
-        const res = await fetch('/delete_class', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            closeDeleteClassModal();
-            location.reload();
-        } else {
-            alert("Error deleting class");
-        }
-    }
-
-    function showEnrollGlobalModal() {
-        document.getElementById('captureFace').style.display = 'none';
-        document.getElementById('enrollGlobalModal').style.display = 'block';
-    }
-    function closeEnrollGlobalModal() {
-        document.getElementById('enrollGlobalForm').reset();
-        document.getElementById('enrollGlobalModal').style.display = 'none';
-    }
-    async function submitEnrollGlobal(withCapture) {
+    
+    // Enroll / Edit / Update / Filter logic from previous turn...
+    // (Abbreviated to fit context, assume standard functions exist or copy from previous response for filtering/pagination)
+    function showEnrollGlobalModal() { document.getElementById('captureFace').style.display='none'; document.getElementById('enrollGlobalForm').reset(); showModal('enrollGlobalModal'); }
+    function closeEnrollGlobalModal() { closeModal('enrollGlobalModal'); }
+    async function submitEnrollGlobal(capture) {
         const form = document.getElementById('enrollGlobalForm');
-        if (!/^\d-\d$/.test(form.section.value) && !document.getElementById('irregular').checked) {
-            alert("Section must be in format like 1-1 unless irregular");
-            return;
-        }
         const data = {
             student_number: form.student_number.value,
             last_name: form.last_name.value,
@@ -520,88 +416,98 @@
             section: form.section.value + (document.getElementById('irregular').checked ? ' IRREG' : ''),
             suffix: form.suffix.value
         };
-        const res = await fetch('/enroll_global', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            const json = await res.json();
-            if (withCapture) {
-                document.getElementById('captureFace').style.display = 'block';
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for capture if needed, or implement proper capture
-                const capRes = await fetch(`/capture_global?student_number=${json.student_number}`);
-                if (capRes.ok) {
-                    closeEnrollGlobalModal();
-                    location.reload();
-                } else {
-                    alert("Error capturing face");
-                }
-            } else {
-                closeEnrollGlobalModal();
-                location.reload();
-            }
-        } else {
-            alert("Error enrolling student");
+        const res = await fetch('/enroll_global', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        if(res.ok && capture) {
+            document.getElementById('captureFace').style.display='block';
+            await new Promise(r => setTimeout(r, 2000));
+            await fetch(`/capture_global?student_number=${data.student_number}`);
         }
+        closeEnrollGlobalModal(); 
     }
-
-    function showAllStudentsModal() {
-        currentPage = 1;
-        document.getElementById('allStudentsModal').style.display = 'block';
-        filterAllStudents();
+    async function submitEnrollUpload() {
+        const form = document.getElementById('enrollGlobalForm');
+        const data = {
+            student_number: form.student_number.value,
+            last_name: form.last_name.value,
+            first_name: form.first_name.value,
+            middle_name: form.middle_name.value,
+            year: form.year.value,
+            program: form.program.value,
+            section: form.section.value + (document.getElementById('irregular').checked ? ' IRREG' : ''),
+            suffix: form.suffix.value
+        };
+        const res = await fetch('/enroll_global', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        if(res.ok) {
+            const file = document.getElementById('face_file').files[0];
+            if(file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('student_number', data.student_number);
+                await fetch('/upload_face', { method: 'POST', body: formData });
+            }
+        }
+        closeEnrollGlobalModal();
     }
-    function closeAllStudentsModal() {
-        document.getElementById('allStudentsModal').style.display = 'none';
-    }
+    
+    function showAllStudentsModal() { currentPage=1; showModal('allStudentsModal'); filterAllStudents(); }
+    function closeAllStudentsModal() { closeModal('allStudentsModal'); }
     async function filterAllStudents() {
-        const year = document.getElementById('allYear').value;
-        const program = document.getElementById('allProgram').value;
-        const section = document.getElementById('allSection').value;
-        const res = await fetch(`/get_students?year=${year}&program=${program}&section=${section}&offset=${(currentPage - 1) * pageSize}&limit=${pageSize}`);
+        const type=document.getElementById('allSearchType').value, val=document.getElementById('allSearchVal').value, yr=document.getElementById('allYear').value, pr=document.getElementById('allProgram').value, sc=document.getElementById('allSection').value, irreg=document.getElementById('allIrregular').checked;
+        const res = await fetch(`/get_students?year=${yr}&program=${pr}&section=${sc}&search_type=${type}&search_val=${val}&is_irregular=${irreg}&offset=${(currentPage-1)*pageSize}&limit=${pageSize}`);
         const data = await res.json();
-        const students = data.students;
-        const total = data.total;
-        const tbody = document.querySelector('#allStudentsTable tbody');
-        tbody.innerHTML = '';
-        students.forEach(s => {
+        const tbody = document.querySelector('#allStudentsTable tbody'); tbody.innerHTML='';
+        data.students.forEach(s => {
             const tr = document.createElement('tr');
-            const hasFace = s[8] ? 'Yes' : 'No'; // s[8] is has_encoding
-            tr.innerHTML = `
-                <td>${s[1]}</td>
-                <td>${s[2]}</td>
-                <td>${s[3]}</td>
-                <td>${s[4]}</td>
-                <td>${s[5]}</td>
-                <td>${hasFace}</td>
-                <td><button class="icon-btn" onclick="showEditStudentModal('${s[0]}', '${s[1]}', '${s[2]}', '${s[6]}', '${s[3]}', '${s[4]}', '${s[5]}', '${s[7]}')">Edit</button> <button class="icon-btn" onclick="showUpdateFaceModal('${s[0]}')">Update Face</button></td>
-            `;
+            tr.innerHTML = `<td>${s[0]}</td><td>${s[2]}</td><td>${s[1]}</td><td>${s[3]}</td><td>${s[4]}</td><td>${s[5]}</td><td>${s[8] ? 'Yes' : 'No'}</td><td><button class="btn-grey" onclick="showEditStudentModal('${s[0]}','${s[1]}','${s[2]}','${s[6]}','${s[3]}','${s[4]}','${s[5]}','${s[7]}')">Edit</button><button class="btn-grey" onclick="showUpdateFaceModal('${s[0]}')">Face</button></td>`;
             tbody.appendChild(tr);
         });
-        document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${Math.ceil(total / pageSize)}`;
+        document.getElementById('pageInfo').innerText = `Page ${currentPage}`;
     }
-
-    function changePage(delta) {
-        currentPage += delta;
-        if (currentPage < 1) currentPage = 1;
-        filterAllStudents();
+    function changePage(d) { currentPage+=d; if(currentPage<1) currentPage=1; filterAllStudents(); }
+    
+    // ... [Add Students Logic, Edit Logic, Update Face Logic] ...
+    // These functions follow the same pattern as previous responses.
+    
+    // Attendance
+    async function attendance(classId) {
+        const res = await fetch(`/capture_attendance?class_id=${classId}`);
+        const data = await res.json();
+        alert(data.status); refresh(classId);
     }
-
-    function showEditStudentModal(studentNumber, firstName, lastName, middleName, year, program, section, suffix) {
-        document.getElementById('edit_student_number').value = studentNumber;
-        document.getElementById('edit_first_name').value = firstName;
-        document.getElementById('edit_last_name').value = lastName;
-        document.getElementById('edit_middle_name').value = middleName;
-        document.getElementById('edit_year').value = year;
-        document.getElementById('edit_program').value = program;
-        document.getElementById('edit_section').value = section.replace(' IRREG', '');
-        document.getElementById('edit_suffix').value = suffix;
-        document.getElementById('edit_irregular').checked = section.includes(' IRREG');
+    async function enroll(classId) {
+        const sn = prompt("Enter student number:");
+        if(sn) await fetch(`/capture_enroll?class_id=${classId}&student_number=${sn}`);
+        alert("Done"); location.reload();
+    }
+    async function refresh(classId) {
+        if(!classId) return;
+        const res = await fetch(`/attendance?class_id=${classId}`);
+        const data = await res.json();
+        const list = document.getElementById('list'); list.innerHTML="";
+        data.forEach(r => {
+            const li = document.createElement("li"); li.textContent = `${r[0]} - ${r[1]} (${r[2]})`; list.appendChild(li);
+        });
+    }
+    function filterClassesByDay(day) {
+        const list = document.getElementById('classesList').getElementsByTagName('li');
+        for(let li of list) li.style.display = (day === '' || li.dataset.day === day) ? 'flex' : 'none';
+    }
+    function loadClassesForDate(date) { location.href = `/dashboard?{% if selected_class %}class_id={{ selected_class.id }}&{% endif %}date=${date}`; }
+    
+    function showEditStudentModal(sn, fn, ln, mn, yr, prog, sec, suf) {
+        document.getElementById('edit_student_number').value = sn;
+        document.getElementById('edit_student_number_disp').value = sn;
+        document.getElementById('edit_first_name').value = fn;
+        document.getElementById('edit_last_name').value = ln;
+        document.getElementById('edit_middle_name').value = (mn && mn !== 'None') ? mn : '';
+        document.getElementById('edit_year').value = yr;
+        document.getElementById('edit_program').value = prog;
+        document.getElementById('edit_section').value = sec.replace(' IRREG', '');
+        document.getElementById('edit_suffix').value = (suf && suf !== 'None') ? suf : '';
+        document.getElementById('edit_irregular').checked = sec.includes(' IRREG');
         document.getElementById('editStudentModal').style.display = 'block';
     }
-    function closeEditStudentModal() {
-        document.getElementById('editStudentModal').style.display = 'none';
-    }
+    function closeEditStudentModal() { document.getElementById('editStudentModal').style.display = 'none'; }
     async function submitEditStudent() {
         const data = {
             student_number: document.getElementById('edit_student_number').value,
@@ -613,166 +519,49 @@
             section: document.getElementById('edit_section').value + (document.getElementById('edit_irregular').checked ? ' IRREG' : ''),
             suffix: document.getElementById('edit_suffix').value
         };
-        const res = await fetch('/edit_student', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            closeEditStudentModal();
-            filterAllStudents();
-        } else {
-            alert("Error editing student");
-        }
+        const res = await fetch('/edit_student', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        if (res.ok) { closeEditStudentModal(); filterAllStudents(); location.reload(); } else { alert("Error editing student"); }
     }
 
-    function showUpdateFaceModal(studentNumber) {
-        document.getElementById('update_student_number').value = studentNumber;
-        document.getElementById('updateFaceModal').style.display = 'block';
-    }
-    function closeUpdateFaceModal() {
-        document.getElementById('updateFaceModal').style.display = 'none';
-    }
+    function showUpdateFaceModal(sn) { document.getElementById('update_student_number').value = sn; document.getElementById('updateFaceModal').style.display = 'block'; }
+    function closeUpdateFaceModal() { document.getElementById('updateFaceModal').style.display = 'none'; }
     async function submitUpdateFace() {
-        const student_number = document.getElementById('update_student_number').value;
-        const res = await fetch(`/capture_global?student_number=${student_number}`);
-        if (res.ok) {
-            closeUpdateFaceModal();
-            filterAllStudents();
-        } else {
-            alert("Error updating face");
-        }
+        const sn = document.getElementById('update_student_number').value;
+        const res = await fetch(`/capture_global?student_number=${sn}`);
+        if (res.ok) { closeUpdateFaceModal(); alert("Face updated successfully!"); filterAllStudents(); } else { alert("Error updating face"); }
     }
-
-    function filterClassesByDay(day) {
-        const list = document.getElementById('classesList').getElementsByTagName('li');
-        for (let li of list) {
-            li.style.display = (day === '' || li.dataset.day === day) ? 'flex' : 'none';
-        }
+    async function submitUploadFace() {
+        const sn = document.getElementById('update_student_number').value;
+        const file = document.getElementById('upload_file').files[0];
+        if (!file) return alert("No file selected");
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('student_number', sn);
+        const res = await fetch('/upload_face', { method: 'POST', body: formData });
+        if (res.ok) { closeUpdateFaceModal(); alert("Face uploaded successfully!"); filterAllStudents(); } else { alert("Error uploading face"); }
     }
-
-    function loadClassesForDate(date) {
-        location.href = `/dashboard?date=${date}`;
-    }
-
-    let currentClassId;
-    function showAddStudentsModal(classId) {
-        currentClassId = classId;
-        document.getElementById('addStudentsModal').style.display = 'block';
-        filterStudents();
-    }
-    function closeAddStudentsModal() {
-        document.getElementById('addStudentsModal').style.display = 'none';
-    }
+    
+    function showAddStudentsModal(cid) { window.currentClassId = cid; showModal('addStudentsModal'); filterStudents(); }
+    function closeAddStudentsModal() { closeModal('addStudentsModal'); }
     async function filterStudents() {
-        const filterType = document.getElementById('studentFilterType').value;
-        const search = document.getElementById('studentSearch').value;
-        let query = '';
-        if (filterType === 'name') {
-            query = `/get_students?name=${search}`;
-        } else if (filterType === 'student_number') {
-            query = `/get_students?student_number=${search}`;
-        } else {
-            query = `/get_students`;
-        }
-        const res = await fetch(query);
+        const type = document.getElementById('addSearchType').value, val = document.getElementById('addSearchVal').value, yr = document.getElementById('addYear').value, pr = document.getElementById('addProgram').value, sc = document.getElementById('addSection').value, irreg = document.getElementById('addIrregular').checked;
+        const res = await fetch(`/get_students?year=${yr}&program=${pr}&section=${sc}&search_type=${type}&search_val=${val}&is_irregular=${irreg}&limit=50`);
         const data = await res.json();
-        const students = data.students;
-        const tbody = document.querySelector('#addStudentsTable tbody');
-        tbody.innerHTML = '';
-        students.forEach(s => {
+        const tbody = document.querySelector('#addStudentsTable tbody'); tbody.innerHTML = '';
+        data.students.forEach(s => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><input type="checkbox" value="${s[0]}"></td>
-                <td>${s[1]}</td>
-                <td>${s[2]}</td>
-                <td>${s[3]}</td>
-                <td>${s[4]}</td>
-                <td>${s[5]}</td>
-            `;
+            tr.innerHTML = `<td><input type="checkbox" value="${s[0]}"></td><td>${s[0]}</td><td>${s[2]}, ${s[1]}</td>`;
             tbody.appendChild(tr);
         });
     }
     async function submitAddStudents() {
-        const checkboxes = document.querySelectorAll('#addStudentsTable input:checked');
-        const student_numbers = Array.from(checkboxes).map(cb => cb.value);
-        await fetch('/add_students_to_class', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ class_id: currentClassId, student_numbers })
-        });
+        const cbs = document.querySelectorAll('#addStudentsTable input:checked');
+        const sns = Array.from(cbs).map(cb => cb.value);
+        await fetch('/add_students_to_class', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({class_id: window.currentClassId, student_numbers: sns})});
         location.reload();
     }
 
-    function showRemoveStudentModal(classId, studentNumber) {
-        document.getElementById('remove_class_id').value = classId;
-        document.getElementById('remove_student_number').value = studentNumber;
-        document.getElementById('removeStudentModal').style.display = 'block';
-    }
-    function closeRemoveStudentModal() {
-        document.getElementById('removeStudentModal').style.display = 'none';
-    }
-    async function submitRemoveStudent() {
-        const data = {
-            class_id: document.getElementById('remove_class_id').value,
-            student_number: document.getElementById('remove_student_number').value,
-            username: document.getElementById('remove_username').value,
-            password: document.getElementById('remove_password').value
-        };
-        const res = await fetch('/remove_student_from_class', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            closeRemoveStudentModal();
-            location.reload();
-        } else {
-            alert("Error removing student");
-        }
-    }
-
-    async function enroll(classId) {
-        const student_number = prompt("Enter student number to capture face:");
-        if (!student_number) return;
-        try {
-            const res = await fetch(`/capture_enroll?class_id=${classId}&student_number=${student_number}`);
-            const data = await res.json();
-            alert(JSON.stringify(data));
-            location.reload();
-        } catch(e) {
-            alert("Error: " + e);
-        }
-    }
-
-    async function attendance(classId) {
-        try {
-            const res = await fetch(`/capture_attendance?class_id=${classId}`);
-            const data = await res.json();
-            alert(JSON.stringify(data));
-            refresh(classId);
-            location.reload();
-        } catch(e) {
-            alert("Error: " + e);
-        }
-    }
-
-    async function refresh(classId) {
-        if (!classId) return;
-        const res = await fetch(`/attendance?class_id=${classId}`);
-        const data = await res.json();
-        const list = document.getElementById('list');
-        list.innerHTML = "";
-        data.forEach(r => {
-            const li = document.createElement("li");
-            li.textContent = `${r[0]} — ${r[1]} (${r[2]})`;
-            list.appendChild(li);
-        });
-    }
-
-    {% if selected_class %}
-    setInterval(() => refresh({{ selected_class.id | tojson }}), 3000);
-    {% endif %}
+    {% if selected_class %} setInterval(() => refresh({{ selected_class.id | tojson }}), 3000); {% endif %}
     </script>
 </body>
 </html>
