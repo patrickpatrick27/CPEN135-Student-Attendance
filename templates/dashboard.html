@@ -187,7 +187,9 @@
                                 <label><input type="checkbox" id="irregular"> Irregular</label>
                             </div>
                         </div>
-                        <button type="button" onclick="submitEnrollGlobal()">Submit</button>
+                        <button type="button" onclick="submitEnrollGlobal(true)">Submit with Capture</button>
+                        <button type="button" onclick="submitEnrollGlobal(false)">Submit (Skip Capture)</button>
+                        <img id="captureFace" src="/stream" style="width: 300px; margin-top: 10px; display: none;">
                     </form>
                 </div>
             </div>
@@ -210,6 +212,7 @@
                                 <th>Year</th>
                                 <th>Program</th>
                                 <th>Section</th>
+                                <th>Face Registered</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -284,6 +287,15 @@
                         </div>
                         <button type="button" onclick="submitEditStudent()">Submit</button>
                     </form>
+                </div>
+            </div>
+            <div id="updateFaceModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeUpdateFaceModal()">&times;</span>
+                    <h2>Update Face for Student</h2>
+                    <input type="hidden" id="update_student_number">
+                    <img id="updateCaptureFace" src="/stream" style="width: 300px; margin-top: 10px;">
+                    <button type="button" onclick="submitUpdateFace()">Capture Face</button>
                 </div>
             </div>
             <h2>Your Classes</h2>
@@ -361,12 +373,13 @@
                     <div class="modal-content">
                         <span class="close" onclick="closeAddStudentsModal()">&times;</span>
                         <h2>Add Students to Class</h2>
-                        <label for="studentYear">Year:</label>
-                        <input type="text" id="studentYear" oninput="filterStudents()">
-                        <label for="studentProgram">Program:</label>
-                        <input type="text" id="studentProgram" oninput="filterStudents()">
-                        <label for="studentSection">Section:</label>
-                        <input type="text" id="studentSection" oninput="filterStudents()">
+                        <label for="studentFilterType">Filter By:</label>
+                        <select id="studentFilterType">
+                            <option value="name">Name</option>
+                            <option value="student_number">Student Number</option>
+                        </select>
+                        <label for="studentSearch">Search:</label>
+                        <input type="text" id="studentSearch" oninput="filterStudents()">
                         <table id="addStudentsTable">
                             <thead>
                                 <tr>
@@ -484,13 +497,14 @@
     }
 
     function showEnrollGlobalModal() {
+        document.getElementById('captureFace').style.display = 'none';
         document.getElementById('enrollGlobalModal').style.display = 'block';
     }
     function closeEnrollGlobalModal() {
         document.getElementById('enrollGlobalForm').reset();
         document.getElementById('enrollGlobalModal').style.display = 'none';
     }
-    async function submitEnrollGlobal() {
+    async function submitEnrollGlobal(withCapture) {
         const form = document.getElementById('enrollGlobalForm');
         if (!/^\d-\d$/.test(form.section.value) && !document.getElementById('irregular').checked) {
             alert("Section must be in format like 1-1 unless irregular");
@@ -512,8 +526,21 @@
             body: JSON.stringify(data)
         });
         if (res.ok) {
-            closeEnrollGlobalModal();
-            location.reload();
+            const json = await res.json();
+            if (withCapture) {
+                document.getElementById('captureFace').style.display = 'block';
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for capture if needed, or implement proper capture
+                const capRes = await fetch(`/capture_global?student_number=${json.student_number}`);
+                if (capRes.ok) {
+                    closeEnrollGlobalModal();
+                    location.reload();
+                } else {
+                    alert("Error capturing face");
+                }
+            } else {
+                closeEnrollGlobalModal();
+                location.reload();
+            }
         } else {
             alert("Error enrolling student");
         }
@@ -539,13 +566,15 @@
         tbody.innerHTML = '';
         students.forEach(s => {
             const tr = document.createElement('tr');
+            const hasFace = s[8] ? 'Yes' : 'No'; // s[8] is has_encoding
             tr.innerHTML = `
                 <td>${s[1]}</td>
                 <td>${s[2]}</td>
                 <td>${s[3]}</td>
                 <td>${s[4]}</td>
                 <td>${s[5]}</td>
-                <td><button class="icon-btn" onclick="showEditStudentModal('${s[0]}', '${s[1]}', '${s[2]}', '${s[6]}', '${s[3]}', '${s[4]}', '${s[5]}', '${s[7]}')">Edit</button> <button class="icon-btn" onclick="updateFace('${s[0]}')">Update Face</button></td>
+                <td>${hasFace}</td>
+                <td><button class="icon-btn" onclick="showEditStudentModal('${s[0]}', '${s[1]}', '${s[2]}', '${s[6]}', '${s[3]}', '${s[4]}', '${s[5]}', '${s[7]}')">Edit</button> <button class="icon-btn" onclick="showUpdateFaceModal('${s[0]}')">Update Face</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -597,6 +626,24 @@
         }
     }
 
+    function showUpdateFaceModal(studentNumber) {
+        document.getElementById('update_student_number').value = studentNumber;
+        document.getElementById('updateFaceModal').style.display = 'block';
+    }
+    function closeUpdateFaceModal() {
+        document.getElementById('updateFaceModal').style.display = 'none';
+    }
+    async function submitUpdateFace() {
+        const student_number = document.getElementById('update_student_number').value;
+        const res = await fetch(`/capture_global?student_number=${student_number}`);
+        if (res.ok) {
+            closeUpdateFaceModal();
+            filterAllStudents();
+        } else {
+            alert("Error updating face");
+        }
+    }
+
     function filterClassesByDay(day) {
         const list = document.getElementById('classesList').getElementsByTagName('li');
         for (let li of list) {
@@ -618,10 +665,17 @@
         document.getElementById('addStudentsModal').style.display = 'none';
     }
     async function filterStudents() {
-        const year = document.getElementById('studentYear').value;
-        const program = document.getElementById('studentProgram').value;
-        const section = document.getElementById('studentSection').value;
-        const res = await fetch(`/get_students?year=${year}&program=${program}&section=${section}`);
+        const filterType = document.getElementById('studentFilterType').value;
+        const search = document.getElementById('studentSearch').value;
+        let query = '';
+        if (filterType === 'name') {
+            query = `/get_students?name=${search}`;
+        } else if (filterType === 'student_number') {
+            query = `/get_students?student_number=${search}`;
+        } else {
+            query = `/get_students`;
+        }
+        const res = await fetch(query);
         const data = await res.json();
         const students = data.students;
         const tbody = document.querySelector('#addStudentsTable tbody');
