@@ -225,7 +225,7 @@
             {% if selected_class %}
                 <div class="calendar">
                     <h2>Calendar</h2>
-                    <input type="date" id="calendarDate" value="{{ selected_date or '' }}" onchange="loadClassesForDate(this.value)">
+                    <input type="date" id="calendarDate" value="{{ selected_date or '' }}" onchange="validateAndLoadDate(this)">
                 </div>
                 {% if selected_date %}
                     <div class="header-actions">
@@ -317,12 +317,17 @@
 
     <script>
     let currentPage = 1; const pageSize = 10;
+    
+    let currentSn = '';
+    let currentCid = '';
 
     function showAuthModal(action, sn, cid) {
         console.log("showAuthModal called with action:", action, "sn:", sn, "cid:", cid);  // Debug log
+        currentSn = sn || '';
+        currentCid = cid || '';
         document.getElementById('auth_action').value = action;
-        document.getElementById('auth_student_number').value = sn || '';
-        document.getElementById('auth_class_id').value = cid || '';
+        document.getElementById('auth_student_number').value = currentSn;
+        document.getElementById('auth_class_id').value = currentCid;
         console.log("Set hidden inputs - student_number:", document.getElementById('auth_student_number').value, "class_id:", document.getElementById('auth_class_id').value);  // Debug log
         
         let title = "Authenticate";
@@ -336,22 +341,22 @@
         document.getElementById('authModalMsg').innerText = msg;
         document.getElementById('authModal').style.display = 'block';
     }
-    function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; document.getElementById('authForm').reset(); }
+    function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; document.getElementById('authForm').reset(); currentSn = ''; currentCid = ''; }
     
     async function submitAuthAction() {
         const action = document.getElementById('auth_action').value;
         const data = {
             username: document.getElementById('auth_username').value,
             password: document.getElementById('auth_password').value,
-            class_id: document.getElementById('auth_class_id').value,
-            student_number: document.getElementById('auth_student_number').value,
+            class_id: currentCid,
+            student_number: currentSn,
             date: "{{ selected_date }}" || new Date().toISOString().split('T')[0]
         };
         if (action !== 'mark_present' && action !== 'clear_attendance' && action !== 'remove_student') {
             delete data.student_number;
             delete data.date;
         }
-        console.log("Sending data to server for action " + action + ":", data);  // Debug log for sent data
+        console.log("Sending data to server:", data);  // Debug log for sent data
         
         let url = '';
         if(action === 'remove_student') url = '/remove_student_from_class';
@@ -362,12 +367,11 @@
         const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
         const json = await res.json();
         
-        console.log("Response from server:", json); // Debug response
-        
         if(res.ok) { closeAuthModal(); location.reload(); }
         else { alert("Error: " + (json.error || "Action failed")); }
     }
 
+    // --- OTHER FUNCTIONS (Add/Edit/Enroll/Filter) preserved ---
     function showModal(id) { document.getElementById(id).style.display = 'block'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     function showAddClassModal() { document.getElementById('addClassForm').reset(); showModal('addClassModal'); }
@@ -549,6 +553,55 @@
         await fetch('/add_students_to_class', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({class_id: window.currentClassId, student_numbers: sns})});
         location.reload();
     }
+
+    // Attendance
+    async function attendance(classId) {
+        const res = await fetch(`/capture_attendance?class_id=${classId}`);
+        const data = await res.json();
+        if (data.status === "match") {
+            location.reload();  // Reload to update the student list
+        }
+    }
+    async function refresh(classId) {
+        if(!classId) return;
+        const res = await fetch(`/attendance?class_id=${classId}`);
+        const data = await res.json();
+        const list = document.getElementById('list'); list.innerHTML="";
+        data.forEach(r => {
+            const li = document.createElement("li"); li.textContent = `${r[0] || 'Unknown'} - ${r[1]} (${r[2]})`; list.appendChild(li);
+        });
+    }
+    function filterClassesByDay(day) {
+        const list = document.getElementById('classesList').getElementsByTagName('li');
+        for(let li of list) li.style.display = (day === '' || li.dataset.day === day) ? 'flex' : 'none';
+    }
+    function loadClassesForDate(date) { location.href = `/dashboard?{% if selected_class %}class_id={{ selected_class.id }}&{% endif %}date=${date}`; }
+
+    var classDay = '{{ selected_class.day if selected_class else "" }}';
+    var dayMap = {
+        'Sunday': 0,
+        'Monday': 1,
+        'Tuesday': 2,
+        'Wednesday': 3,
+        'Thursday': 4,
+        'Friday': 5,
+        'Saturday': 6
+    };
+
+    function validateAndLoadDate(input) {
+        var selectedDate = new Date(input.value);
+        if (isNaN(selectedDate.getTime())) return;
+
+        if (classDay && selectedDate.getDay() !== dayMap[classDay]) {
+            alert("Selected date does not match the class day (" + classDay + "). Please select a valid date.");
+            input.value = input.oldValue || '';
+            return;
+        }
+        input.oldValue = input.value;
+        loadClassesForDate(input.value);
+    }
+
+    document.getElementById('calendarDate').oldValue = document.getElementById('calendarDate').value;
 
     {% if selected_class %} setInterval(() => attendance({{ selected_class.id | tojson }}), 5000); setInterval(() => refresh({{ selected_class.id | tojson }}), 3000); {% endif %}
     </script>
