@@ -200,6 +200,26 @@ def get_class_students_with_details(cid):
             WHERE cs.class_id=? 
             ORDER BY s.last_name, s.first_name''', (cid,)).fetchall()
 
+def log_attendance(cid, sn, status, specific_date=None):
+    if specific_date:
+        ts = f"{specific_date} {datetime.now().strftime('%H:%M:%S')}"
+    else:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+    today = ts.split(" ")[0]
+    
+    print(f"Attempting to log attendance for student {sn} in class {cid} on {today} with status {status}")
+    
+    with sqlite3.connect(DB) as c:
+        existing = c.cursor().execute("SELECT * FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{today}%")).fetchone()
+        if existing:
+            print(f"Attendance already exists for {sn} in class {cid} on {today}: {existing}. Skipping insert.")
+        else:
+            print(f"No existing attendance. Inserting new record for {sn} in class {cid} on {today}: status={status}, timestamp={ts}")
+            c.cursor().execute("INSERT INTO attendance (class_id, student_number, timestamp, status) VALUES (?, ?, ?, ?)", (cid, sn, ts, status))
+            c.commit()
+            print("Insert completed.")
+
 def get_attendance_by_date(cid, target_date):
     if not target_date: target_date = datetime.now().strftime("%Y-%m-%d")
     with sqlite3.connect(DB) as c:
@@ -214,28 +234,14 @@ def get_student_statuses(cid, target_date=None):
         sn, ln, fn, mn, section = row
         mi = f" {mn[0]}." if mn and len(mn) > 0 else ""
         formatted_name = f"{ln}, {fn}{mi}"
-        results[sn] = {'name': formatted_name, 'section': section, 'status': attendance.get(sn, 'absent')}
+        status = attendance.get(sn, 'absent')
+        results[sn] = {'name': formatted_name, 'section': section, 'status': status}
     return results
 
 def compute_status(start, ts):
     s_dt = datetime.strptime(start, "%H:%M")
     t_dt = datetime.strptime(ts.split(" ")[1], "%H:%M:%S")
     return "on_time" if t_dt <= s_dt + timedelta(minutes=LATE_THRESHOLD) else "late"
-
-def log_attendance(cid, sn, status, specific_date=None):
-    # If specific_date is provided, use it (e.g. for manual override), otherwise use now
-    if specific_date:
-        # Append current time to the date to make a timestamp
-        ts = f"{specific_date} {datetime.now().strftime('%H:%M:%S')}"
-    else:
-        ts = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-    with sqlite3.connect(DB) as c:
-        today = ts.split(" ")[0]
-        # Check if record exists for this day
-        if not c.cursor().execute("SELECT * FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{today}%")).fetchone():
-            c.cursor().execute("INSERT INTO attendance (class_id, student_number, timestamp, status) VALUES (?, ?, ?, ?)", (cid, sn, ts, status))
-            c.commit()
 
 def count_past_classes(day_name, start_date_str, end_date_str):
     try:
@@ -378,50 +384,68 @@ def edit_class_route():
 def delete_class_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    if verify_professor_credentials(d.get("username"), d.get("password")):
-        delete_class(d.get("class_id"), session["professor_id"])
-        return jsonify({"status": "deleted"})
-    return jsonify({"error": "Invalid credentials"}), 401
+    if d.get("username") != session["username"] or not verify_professor_credentials(d.get("username"), d.get("password")):
+        return jsonify({"error": "Invalid credentials"}), 401
+    delete_class(d.get("class_id"), session["professor_id"])
+    return jsonify({"status": "deleted"})
 
 @app.route("/remove_student_from_class", methods=["POST"])
 def remove_student_from_class_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    # CREDENTIAL CHECK RESTORED
-    if verify_professor_credentials(d.get("username"), d.get("password")):
-        remove_student_from_class(d.get("class_id"), d.get("student_number"))
-        return jsonify({"status": "removed"})
-    return jsonify({"error": "Invalid credentials"}), 401
+    if d.get("username") != session["username"] or not verify_professor_credentials(d.get("username"), d.get("password")):
+        return jsonify({"error": "Invalid credentials"}), 401
+    remove_student_from_class(d.get("class_id"), d.get("student_number"))
+    return jsonify({"status": "removed"})
 
-# NEW: Manual Attendance Route
 @app.route("/manual_attendance", methods=["POST"])
 def manual_attendance_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    if verify_professor_credentials(d.get("username"), d.get("password")):
-        cid = d.get("class_id")
-        today = datetime.now().strftime("%Y-%m-%d")
-        if d.get("date") == today:
-            with sqlite3.connect(DB) as c:
-                start_time = c.cursor().execute("SELECT start_time FROM classes WHERE id=?", (cid,)).fetchone()[0]
-            status = compute_status(start_time, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        else:
-            status = "on_time"
-        log_attendance(cid, d.get("student_number"), status, d.get("date"))
-        return jsonify({"status": "marked"})
-    return jsonify({"error": "Invalid credentials"}), 401
+    print("Received data for manual attendance:", d)
+    if d.get("username") != session["username"] or not verify_professor_credentials(d.get("username"), d.get("password")):
+        return jsonify({"error": "Invalid credentials"}), 401
+    cid = d.get("class_id")
+    sn = d.get("student_number")
+    date = d.get("date") or datetime.now().strftime("%Y-%m-%d")
+    print("Student number received:", sn if sn else "None")
+    if not cid or not sn or not date:
+        print(f"Missing parameters: cid={cid}, sn={sn}, date={date}")
+        return jsonify({"error": "Missing parameters"}), 400
+    print(f"Manual attendance request for student {sn} in class {cid} on {date}")
+    with sqlite3.connect(DB) as c:
+        if not c.cursor().execute("SELECT * FROM class_students WHERE class_id=? AND student_number=?", (cid, sn)).fetchone():
+            print(f"Student {sn} not in class {cid}")
+            return jsonify({"error": "Student not in class"}), 400
+    today = datetime.now().strftime("%Y-%m-%d")
+    if date == today:
+        with sqlite3.connect(DB) as c:
+            start_time = c.cursor().execute("SELECT start_time FROM classes WHERE id=?", (cid,)).fetchone()[0]
+        status = compute_status(start_time, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    else:
+        status = "on_time"
+    log_attendance(cid, sn, status, date)
+    print(f"Marked {status} for {sn} in {cid} on {date}")
+    return jsonify({"status": "marked"})
 
-# NEW: Clear Attendance Route
 @app.route("/clear_attendance", methods=["POST"])
 def clear_attendance_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    if verify_professor_credentials(d.get("username"), d.get("password")):
-        with sqlite3.connect(DB) as c:
-            c.cursor().execute("DELETE FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (d.get("class_id"), d.get("student_number"), f"{d.get('date')}%"))
-            c.commit()
-        return jsonify({"status": "cleared"})
-    return jsonify({"error": "Invalid credentials"}), 401
+    print("Received data for clear attendance:", d)
+    if d.get("username") != session["username"] or not verify_professor_credentials(d.get("username"), d.get("password")):
+        return jsonify({"error": "Invalid credentials"}), 401
+    cid = d.get("class_id")
+    sn = d.get("student_number")
+    date = d.get("date") or datetime.now().strftime("%Y-%m-%d")
+    if not cid or not sn or not date:
+        return jsonify({"error": "Missing parameters"}), 400
+    print(f"Clear attendance request for student {sn} in class {cid} on {date}")
+    with sqlite3.connect(DB) as c:
+        deleted = c.cursor().execute("DELETE FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{date}%")).rowcount
+        c.commit()
+        print(f"Deleted {deleted} records")
+    return jsonify({"status": "cleared"})
 
 @app.route("/enroll_global", methods=["POST"])
 def enroll_global():
@@ -438,20 +462,6 @@ def edit_student_route():
     d = request.json
     edit_student(d.get("student_number"), d.get("last_name"), d.get("first_name"), d.get("middle_name"), d.get("year"), d.get("program"), d.get("section"), d.get("suffix"))
     return jsonify({"status": "edited"})
-
-@app.route("/capture_global", methods=["GET"])
-def capture_global():
-    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
-    sn = request.args.get("student_number")
-    frame = get_latest_frame()
-    if frame is None: return jsonify({"error": "No frame"}), 500
-    encs = face_recognition.face_encodings(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    if len(encs) != 1: return jsonify({"error": "Exactly one face must be detected"}), 400
-    with sqlite3.connect(DB) as c:
-        c.cursor().execute("UPDATE students SET encoding=? WHERE student_number=?", (encs[0].tobytes(), sn))
-        c.commit()
-    cv2.imwrite(os.path.join(UPLOADS, f"{sn}.jpg"), frame)
-    return jsonify({"status": "captured", "student_number": sn})
 
 @app.route("/upload_face", methods=["POST"])
 def upload_face():
@@ -506,7 +516,7 @@ def stream():
 def attendance_list():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     with sqlite3.connect(DB) as c:
-        return jsonify(c.cursor().execute("SELECT student_number, timestamp, status FROM attendance WHERE class_id=? ORDER BY timestamp DESC LIMIT 50", (request.args.get("class_id"),)).fetchall())
+        return jsonify(c.cursor().execute("SELECT s.name, a.timestamp, a.status FROM attendance a JOIN students s ON a.student_number = s.student_number WHERE class_id=? ORDER BY a.timestamp DESC LIMIT 50", (request.args.get("class_id"),)).fetchall())
 
 @app.route("/capture_attendance", methods=["GET"])
 def capture_attendance():
@@ -537,6 +547,7 @@ def capture_attendance():
                 return jsonify({"status": "not_in_class"})
             start_time = c.cursor().execute("SELECT start_time FROM classes WHERE id=?", (cid,)).fetchone()[0]
             row = c.cursor().execute("SELECT last_name, first_name FROM students WHERE student_number=?", (sn,)).fetchone()
+            class_row = c.cursor().execute("SELECT name, section FROM classes WHERE id=?", (cid,)).fetchone()
             if row:
                 lname = row[0] if row[0] else ""
                 fname = row[1] if row[1] else ""
@@ -544,11 +555,21 @@ def capture_attendance():
                 lcd_name = f"{lname}, {fname_short}"
             else:
                 lcd_name = "Unknown"
+            if class_row:
+                cls_name = class_row[0] if class_row[0] else ""
+                cls_section = class_row[1] if class_row[1] else ""
+                lcd_class = f"{cls_name} {cls_section}"
 
         status = compute_status(start_time, time.strftime("%Y-%m-%d %H:%M:%S"))
+        if status == "on_time":
+            lcd_status = "On Time"
+        elif status == "late":
+            lcd_status = "Late"
+        else:
+            lcd_status = "Absent"
         log_attendance(cid, sn, status)
         try:
-            msg = f"{urllib.parse.quote(lcd_name)}|{urllib.parse.quote(status.upper())}"
+            msg = f"{urllib.parse.quote(lcd_name)}|{urllib.parse.quote(lcd_class)}|{urllib.parse.quote(lcd_status)}"
             requests.get(f"http://{ESP32_IP}/update_lcd?message={msg}", timeout=1)
         except: pass
         return jsonify({"status": "match", "student_number": sn, "name": lcd_name, "attendance_status": status})

@@ -143,12 +143,10 @@
                         </div>
                         <div class="form-row">
                             <div><label>Program:</label><input type="text" id="program" maxlength="10" oninput="this.value = this.value.toUpperCase()" required></div>
-                            <div class="checkbox-label"><label>Section:</label><input type="text" id="section" required><label><input type="checkbox" id="irregular"> Irregular</label></div>
+                            <div><label>Section:</label><input type="text" id="section" required><label for="irregular" style="display: block; text-align: center;">Irregular</label><input type="checkbox" id="irregular" style="display: block; margin: 0 auto;"></div>
                         </div>
-                        <button type="button" onclick="submitEnrollGlobal(true)">Submit with Capture</button>
-                        <button type="button" onclick="submitEnrollUpload()">Submit with Upload</button>
                         <button type="button" onclick="submitEnrollGlobal(false)">Submit (Skip Face)</button>
-                        <img id="captureFace" src="/stream" style="width: 100%; margin-top: 10px; display: none;">
+                        <button type="button" onclick="submitEnrollUpload()">Submit with Upload</button>
                         <input type="file" id="face_file" accept=".jpg,.jpeg" style="margin-top: 10px;">
                     </form>
                 </div>
@@ -159,6 +157,7 @@
                 <div class="modal-content">
                     <span class="close" onclick="closeAllStudentsModal()">&times;</span>
                     <h2>All Students Database</h2>
+                    <a href="/export_all_students" class="btn-link btn-orange">Export All Students</a>
                     <div class="filter-bar">
                         <div class="filter-group"><label>Search By:</label><select id="allSearchType"><option value="first_name">First Name</option><option value="last_name">Last Name</option><option value="student_number">Student No</option></select></div>
                         <div class="filter-group" style="flex:2;"><label>Search Term:</label><input type="text" id="allSearchVal" oninput="filterAllStudents()"></div>
@@ -176,7 +175,32 @@
             </div>
 
             <div id="updateFaceModal" class="modal"><div class="modal-content" style="max-width: 600px;"><span class="close" onclick="closeUpdateFaceModal()">&times;</span><h2>Update Face</h2><input type="hidden" id="update_student_number"><img id="updateCaptureFace" src="/stream" style="width:100%"><button type="button" onclick="submitUpdateFace()">Capture</button><input type="file" id="upload_file" accept=".jpg,.jpeg"><button type="button" onclick="submitUploadFace()">Upload</button></div></div>
-            <div id="editStudentModal" class="modal"><div class="modal-content" style="max-width:600px"><span class="close" onclick="closeEditStudentModal()">&times;</span><h2>Edit Student</h2><form id="editStudentForm"><input type="hidden" id="edit_student_number"><div class="form-row"><div><label>Last:</label><input type="text" id="edit_last_name"></div><div><label>First:</label><input type="text" id="edit_first_name"></div></div><div class="form-row"><div><label>Mid:</label><input type="text" id="edit_middle_name"></div><div><label>No:</label><input type="text" id="edit_student_number_disp" disabled></div></div><div class="form-row"><div><label>Suffix:</label><select id="edit_suffix"><option value="">None</option><option value="Jr.">Jr.</option><option value="Sr.">Sr.</option></select></div><div><label>Year:</label><select id="edit_year"><option>1st</option><option>2nd</option><option>3rd</option><option>4th</option></select></div></div><div class="form-row"><div><label>Prog:</label><input type="text" id="edit_program"></div><div class="checkbox-label"><label>Sec:</label><input type="text" id="edit_section"></div></div><label><input type="checkbox" id="edit_irregular">Irreg</label><button type="button" onclick="submitEditStudent()">Submit</button></form></div></div>
+            <div id="editStudentModal" class="modal">
+                <div class="modal-content" style="max-width: 600px;">
+                    <span class="close" onclick="closeEditStudentModal()">&times;</span>
+                    <h2>Edit Student</h2>
+                    <form id="editStudentForm">
+                        <input type="hidden" id="edit_student_number">
+                        <div class="form-row">
+                            <div><label>Last Name:</label><input type="text" id="edit_last_name" required></div>
+                            <div><label>First Name:</label><input type="text" id="edit_first_name" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Middle Name:</label><input type="text" id="edit_middle_name"></div>
+                            <div><label>Student Number:</label><input type="text" id="edit_student_number_disp" disabled></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Suffix:</label><select id="edit_suffix"><option value="">None</option><option value="Jr.">Jr.</option><option value="Sr.">Sr.</option></select></div>
+                            <div><label>Year:</label><select id="edit_year" required><option value="1st">1st</option><option value="2nd">2nd</option><option value="3rd">3rd</option><option value="4th">4th</option></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div><label>Program:</label><input type="text" id="edit_program" required></div>
+                            <div><label>Section:</label><input type="text" id="edit_section" required><label for="edit_irregular" style="display: block; text-align: center;">Irregular</label><input type="checkbox" id="edit_irregular" style="display: block; margin: 0 auto;"></div>
+                        </div>
+                        <button type="button" onclick="submitEditStudent()">Submit</button>
+                    </form>
+                </div>
+            </div>
 
             <h2>Your Classes</h2>
             <select id="dayFilter" onchange="filterClassesByDay(this.value)">
@@ -209,6 +233,7 @@
                         <div>
                             <a href="/export_course?class_id={{ selected_class.id }}" class="btn-link btn-green">Export Semester</a>
                             <a href="/export_session?class_id={{ selected_class.id }}&date={{ selected_date }}" class="btn-link btn-purple">Export Daily</a>
+                            <a href="/export_all_attendance" class="btn-link btn-orange">Export All Data</a>
                         </div>
                     </div>
                     {% if error_msg %}
@@ -219,35 +244,28 @@
                             <span class="stat late">Late: {{ late }}</span>
                             <span class="stat absent">Absent: {{ absent }}</span>
                         </div>
-                        {% if selected_date == today %}
-                            <img src="/stream" id="cam">
-                            <br>
-                            <button onclick="enroll({{ selected_class.id | tojson }})">Enroll Student (Capture Face)</button>
-                            <button onclick="attendance({{ selected_class.id | tojson }})">Take Attendance</button>
-                        {% endif %}
-                        
-                        <h3 style="margin-top: 20px;">Students in Class</h3>
-                        <button onclick="importStudentsFromSection({{ selected_class.id | tojson }})" class="btn-orange">
-                            Import All Students from {{ selected_class.program }} {{ selected_class.year }} Year ({{ selected_class.section }})
-                        </button>
-                        <div class="add-student-buttons">
-                            <button onclick="showAddStudentsModal({{ selected_class.id | tojson }})">Manually Add Students</button>
-                        </div>
-                        
+                        <img src="/stream" id="cam">
                         <div class="students" style="margin-top: 10px;">
                             {% for sid, info in students_statuses.items() %}
                                 <div class="student {{ info.status }}">
                                     <span>{{ info.name }} ({{ sid }}) - {{ info.status | replace('_', ' ') | title }}</span>
                                     <div>
                                         {% if info.status == 'absent' %}
-                                            <button class="icon-btn btn-green" onclick="showAuthModal('mark_present', '{{ sid }}', {{ selected_class.id | tojson }})">Mark Present</button>
+                                            <button class="btn-green" onclick="showAuthModal('mark_present', '{{ sid }}', {{ selected_class.id }})">Mark Present</button>
                                         {% else %}
-                                            <button class="icon-btn btn-grey" onclick="showAuthModal('clear_attendance', '{{ sid }}', {{ selected_class.id | tojson }})">Clear Status</button>
+                                            <button class="btn-grey" onclick="showAuthModal('clear_attendance', '{{ sid }}', {{ selected_class.id }})">Clear Status</button>
                                         {% endif %}
-                                        <button class="icon-btn btn-red" onclick="showAuthModal('remove_student', '{{ sid }}', {{ selected_class.id | tojson }})">Remove</button>
+                                        <button class="btn-red" onclick="showAuthModal('remove_student', '{{ sid }}', {{ selected_class.id }})">Remove</button>
                                     </div>
                                 </div>
                             {% endfor %}
+                        </div>
+
+                        <button onclick="importStudentsFromSection({{ selected_class.id }})" class="btn-orange">
+                            Import All Students from {{ selected_class.program }} {{ selected_class.year }} Year ({{ selected_class.section }})
+                        </button>
+                        <div class="add-student-buttons">
+                            <button onclick="showAddStudentsModal({{ selected_class.id }})">Manually Add Students</button>
                         </div>
 
                         <div id="addStudentsModal" class="modal">
@@ -299,12 +317,13 @@
 
     <script>
     let currentPage = 1; const pageSize = 10;
-    
-    // --- AUTH ACTION LOGIC ---
+
     function showAuthModal(action, sn, cid) {
+        console.log("showAuthModal called with action:", action, "sn:", sn, "cid:", cid);  // Debug log
         document.getElementById('auth_action').value = action;
         document.getElementById('auth_student_number').value = sn || '';
-        document.getElementById('auth_class_id').value = cid;
+        document.getElementById('auth_class_id').value = cid || '';
+        console.log("Set hidden inputs - student_number:", document.getElementById('auth_student_number').value, "class_id:", document.getElementById('auth_class_id').value);  // Debug log
         
         let title = "Authenticate";
         let msg = "Enter credentials:";
@@ -326,23 +345,29 @@
             password: document.getElementById('auth_password').value,
             class_id: document.getElementById('auth_class_id').value,
             student_number: document.getElementById('auth_student_number').value,
-            date: "{{ selected_date }}"
+            date: "{{ selected_date }}" || new Date().toISOString().split('T')[0]
         };
+        if (action !== 'mark_present' && action !== 'clear_attendance' && action !== 'remove_student') {
+            delete data.student_number;
+            delete data.date;
+        }
+        console.log("Sending data to server for action " + action + ":", data);  // Debug log for sent data
         
         let url = '';
         if(action === 'remove_student') url = '/remove_student_from_class';
         if(action === 'mark_present') url = '/manual_attendance';
         if(action === 'clear_attendance') url = '/clear_attendance';
-        if(action === 'delete_class') url = '/delete_class'; delete data.student_number; delete data.date;
+        if(action === 'delete_class') url = '/delete_class';
         
         const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
         const json = await res.json();
+        
+        console.log("Response from server:", json); // Debug response
         
         if(res.ok) { closeAuthModal(); location.reload(); }
         else { alert("Error: " + (json.error || "Action failed")); }
     }
 
-    // --- OTHER FUNCTIONS (Add/Edit/Enroll/Filter) preserved ---
     function showModal(id) { document.getElementById(id).style.display = 'block'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     function showAddClassModal() { document.getElementById('addClassForm').reset(); showModal('addClassModal'); }
@@ -400,9 +425,7 @@
         }
     }
     
-    // Enroll / Edit / Update / Filter logic from previous turn...
-    // (Abbreviated to fit context, assume standard functions exist or copy from previous response for filtering/pagination)
-    function showEnrollGlobalModal() { document.getElementById('captureFace').style.display='none'; document.getElementById('enrollGlobalForm').reset(); showModal('enrollGlobalModal'); }
+    function showEnrollGlobalModal() { document.getElementById('enrollGlobalForm').reset(); showModal('enrollGlobalModal'); }
     function closeEnrollGlobalModal() { closeModal('enrollGlobalModal'); }
     async function submitEnrollGlobal(capture) {
         const form = document.getElementById('enrollGlobalForm');
@@ -417,11 +440,6 @@
             suffix: form.suffix.value
         };
         const res = await fetch('/enroll_global', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        if(res.ok && capture) {
-            document.getElementById('captureFace').style.display='block';
-            await new Promise(r => setTimeout(r, 2000));
-            await fetch(`/capture_global?student_number=${data.student_number}`);
-        }
         closeEnrollGlobalModal(); 
     }
     async function submitEnrollUpload() {
@@ -464,35 +482,6 @@
         document.getElementById('pageInfo').innerText = `Page ${currentPage}`;
     }
     function changePage(d) { currentPage+=d; if(currentPage<1) currentPage=1; filterAllStudents(); }
-    
-    // ... [Add Students Logic, Edit Logic, Update Face Logic] ...
-    // These functions follow the same pattern as previous responses.
-    
-    // Attendance
-    async function attendance(classId) {
-        const res = await fetch(`/capture_attendance?class_id=${classId}`);
-        const data = await res.json();
-        alert(data.status); refresh(classId);
-    }
-    async function enroll(classId) {
-        const sn = prompt("Enter student number:");
-        if(sn) await fetch(`/capture_enroll?class_id=${classId}&student_number=${sn}`);
-        alert("Done"); location.reload();
-    }
-    async function refresh(classId) {
-        if(!classId) return;
-        const res = await fetch(`/attendance?class_id=${classId}`);
-        const data = await res.json();
-        const list = document.getElementById('list'); list.innerHTML="";
-        data.forEach(r => {
-            const li = document.createElement("li"); li.textContent = `${r[0]} - ${r[1]} (${r[2]})`; list.appendChild(li);
-        });
-    }
-    function filterClassesByDay(day) {
-        const list = document.getElementById('classesList').getElementsByTagName('li');
-        for(let li of list) li.style.display = (day === '' || li.dataset.day === day) ? 'flex' : 'none';
-    }
-    function loadClassesForDate(date) { location.href = `/dashboard?{% if selected_class %}class_id={{ selected_class.id }}&{% endif %}date=${date}`; }
     
     function showEditStudentModal(sn, fn, ln, mn, yr, prog, sec, suf) {
         document.getElementById('edit_student_number').value = sn;
@@ -561,7 +550,7 @@
         location.reload();
     }
 
-    {% if selected_class %} setInterval(() => refresh({{ selected_class.id | tojson }}), 3000); {% endif %}
+    {% if selected_class %} setInterval(() => attendance({{ selected_class.id | tojson }}), 5000); setInterval(() => refresh({{ selected_class.id | tojson }}), 3000); {% endif %}
     </script>
 </body>
 </html>
