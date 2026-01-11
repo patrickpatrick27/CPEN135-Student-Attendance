@@ -1,8 +1,8 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <WiFiManager.h>  // Install via Library Manager: "WiFiManager" by tzapu
+#include <U8g2lib.h>
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h> // Install via Library Manager: "LiquidCrystal I2C" by Frank de Brabander
 #include "esp_http_server.h"
 
 // ==========================================
@@ -27,13 +27,22 @@
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-// LCD I2C PINS
+// OLED I2C PINS
 // Note: These pins conflict with the SD Card slot.
 #define I2C_SDA 15
 #define I2C_SCL 14
-#define LCD_ADDR 0x27  // Check your address (usually 0x27 or 0x3F)
+#define OLED_ADDR 0x3C  // Check your address (usually 0x3C or 0x3D)
 
-LiquidCrystal_I2C lcd(LCD_ADDR, 16, 2);
+// OLED Configuration
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+U8G2_SH1106_128X64_NONAME_F_SW_I2C display(U8G2_R0, /* clock=*/ 14, /* data=*/ 15, /* reset=*/ U8X8_PIN_NONE);
+
+// --- CONFIGURATION --- 
+// How many pixels to move down? 
+// Change this to 1, 2, or 5 depending on how bad the top line is. 
+const int offset_y = 3; 
 
 // SERVER HANDLES
 httpd_handle_t stream_httpd = NULL;
@@ -72,7 +81,7 @@ void urlDecode(char *dst, const char *src) {
 // 3. HTTP HANDLERS
 // ==========================================
 
-// Handler to update LCD Text
+// Handler to update OLED Text
 // Usage: http://IP/update_lcd?message=Line1|Line2
 static esp_err_t update_lcd_handler(httpd_req_t *req) {
   char query[200] = {0};
@@ -85,23 +94,36 @@ static esp_err_t update_lcd_handler(httpd_req_t *req) {
       urlDecode(decoded, param);
       
       String fullMsg = String(decoded);
-      String line1 = fullMsg;
+      String line1 = "";
       String line2 = "";
+      String line3 = "";
       
-      int splitIndex = fullMsg.indexOf('|');
-      if (splitIndex != -1) {
-        line1 = fullMsg.substring(0, splitIndex);
-        line2 = fullMsg.substring(splitIndex + 1);
+      int firstSplit = fullMsg.indexOf('|');
+      int secondSplit = fullMsg.indexOf('|', firstSplit + 1);
+      
+      if (firstSplit != -1) {
+        line1 = fullMsg.substring(0, firstSplit);
+        if (secondSplit != -1) {
+          line2 = fullMsg.substring(firstSplit + 1, secondSplit);
+          line3 = fullMsg.substring(secondSplit + 1);
+        } else {
+          line2 = fullMsg.substring(firstSplit + 1);
+        }
+      } else {
+        line1 = fullMsg;
       }
 
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print(line1.substring(0, 16)); 
+      display.clearBuffer();
+      display.setFont(u8g2_font_ncenB08_tr); 
+      display.drawStr(0, 10 + offset_y, line1.substring(0, 16).c_str()); 
       
       if (line2.length() > 0) {
-        lcd.setCursor(0, 1);
-        lcd.print(line2.substring(0, 16));
+        display.drawStr(0, 20 + offset_y, line2.substring(0, 16).c_str());
       }
+      if (line3.length() > 0) {
+        display.drawStr(0, 30 + offset_y, line3.substring(0, 16).c_str());
+      }
+      display.sendBuffer();
     }
   }
   httpd_resp_send(req, "OK", 2);
@@ -157,7 +179,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   
-  // --- SERVER 1: Control (LCD) on Port 80 ---
+  // --- SERVER 1: Control (OLED) on Port 80 ---
   config.server_port = 80;
   
   httpd_uri_t lcd_uri = {
@@ -236,23 +258,24 @@ void setup() {
     return;
   }
 
-  // 2. Initialize LCD (Using Custom Pins)
-  Wire.begin(I2C_SDA, I2C_SCL);
-  lcd.init();
-  lcd.backlight();
-  lcd.setCursor(0, 0);
-  lcd.print("Connecting WiFi");
+  // 2. Initialize OLED (Using I2C)
+  display.begin();
+  display.clearBuffer();
+  display.setFont(u8g2_font_ncenB08_tr);
+  display.drawStr(0, 15 + offset_y, "Connecting WiFi");
+  display.sendBuffer();
 
   // 3. WiFi Connection
   WiFiManager wm;
-  // wm.resetSettings(); // Uncomment to wipe credentials
+  // wm.resetSettings(); // Uncomment to wipe credentials if NVS is corrupted
   
   // Tries to connect to saved WiFi. If fails, creates AP named "ESP32-Attendance"
   bool res = wm.autoConnect("ESP32-Attendance"); 
 
   if(!res) {
-    lcd.clear();
-    lcd.print("WiFi Failed");
+    display.clearBuffer();
+    display.drawStr(0, 15 + offset_y, "WiFi Failed");
+    display.sendBuffer();
     ESP.restart();
   } 
   
@@ -260,11 +283,10 @@ void setup() {
   startCameraServer();
 
   // 5. Display Status
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("IP Address:");
-  lcd.setCursor(0, 1);
-  lcd.print(WiFi.localIP());
+  display.clearBuffer();
+  display.drawStr(0, 15 + offset_y, "IP Address:");
+  display.drawStr(0, 30 + offset_y, WiFi.localIP().toString().c_str());
+  display.sendBuffer();
   
   Serial.print("Stream Ready! Go to: http://");
   Serial.print(WiFi.localIP());
