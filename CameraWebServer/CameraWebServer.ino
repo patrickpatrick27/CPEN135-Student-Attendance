@@ -42,7 +42,7 @@ U8G2_SH1106_128X64_NONAME_F_SW_I2C display(U8G2_R0, /* clock=*/ 14, /* data=*/ 1
 // --- CONFIGURATION --- 
 // How many pixels to move down? 
 // Change this to 1, 2, or 5 depending on how bad the top line is. 
-const int offset_y = 3; 
+const int offset_y = 5; 
 
 // SERVER HANDLES
 httpd_handle_t stream_httpd = NULL;
@@ -257,6 +257,11 @@ void setup() {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
+
+  // Correct orientation (common for ESP32-CAM)
+  sensor_t * s = esp_camera_sensor_get();
+  s->set_vflip(s, 1);    // 1 = vertical flip (fixes upside-down)
+  s->set_hmirror(s, 1);  // 1 = horizontal mirror (fixes left-right flip)
 
   // 2. Initialize OLED (Using I2C)
   display.begin();
