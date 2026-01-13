@@ -14,7 +14,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
 # ================= CONFIGURATION =================
-ESP32_IP = "192.168.18.59" 
+ESP32_IP = "192.168.1.81" 
 ESP32_STREAM = f"http://{ESP32_IP}:81/stream"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -213,7 +213,10 @@ def log_attendance(cid, sn, status, specific_date=None):
     with sqlite3.connect(DB) as c:
         existing = c.cursor().execute("SELECT * FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{today}%")).fetchone()
         if existing:
-            print(f"Attendance already exists for {sn} in class {cid} on {today}: {existing}. Skipping insert.")
+            print(f"Attendance already exists for {sn} in class {cid} on {today}: {existing}. Updating record.")
+            c.cursor().execute("UPDATE attendance SET timestamp=?, status=? WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (ts, status, cid, sn, f"{today}%"))
+            c.commit()
+            print("Update completed.")
         else:
             print(f"No existing attendance. Inserting new record for {sn} in class {cid} on {today}: status={status}, timestamp={ts}")
             c.cursor().execute("INSERT INTO attendance (class_id, student_number, timestamp, status) VALUES (?, ?, ?, ?)", (cid, sn, ts, status))
@@ -523,25 +526,43 @@ def capture_attendance():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     cid = request.args.get("class_id", type=int)
     if not cid: return jsonify({"error": "Class ID required"}), 400
+    print("Capture attendance requested for class:", cid)
     frame = get_latest_frame()
-    if frame is None: return jsonify({"error": "No frame"}), 500
+    if frame is None: 
+        print("No frame available")
+        return jsonify({"error": "No frame"}), 500
 
-    encs = face_recognition.face_encodings(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    # NEW: Save frame for debug (remove after testing)
+    debug_path = os.path.join(BASE_DIR, "debug_frame.jpg")
+    cv2.imwrite(debug_path, frame)
+    print(f"Debug frame saved to: {debug_path}")
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    encs = face_recognition.face_encodings(rgb)
+    print("Faces detected in frame:", len(encs))
     if not encs:
+        print("No face detected in the frame")
         try: requests.get(f"http://{ESP32_IP}/update_lcd?message=No%20Face%20Detected", timeout=0.5)
         except: pass
         return jsonify({"status": "no_face"})
 
     query = encs[0]
     ids, names, known_encs = get_all_encodings()
-    if not known_encs: return jsonify({"status": "no_known_faces"})
+    print("Known encodings loaded:", len(known_encs))
+    if not known_encs: 
+        print("No known faces in database")
+        return jsonify({"status": "no_known_faces"})
 
     dists = face_recognition.face_distance(known_encs, query)
     best_idx = int(np.argmin(dists))
-    if dists[best_idx] < 0.5:
+    min_dist = dists[best_idx]
+    print("Best match distance:", min_dist)
+    if min_dist < 0.65:
         sn = ids[best_idx]
+        print("Match found for student:", sn)
         with sqlite3.connect(DB) as c:
             if not c.cursor().execute("SELECT * FROM class_students WHERE class_id=? AND student_number=?", (cid, sn)).fetchone():
+                print("Student not enrolled in this class:", sn)
                 try: requests.get(f"http://{ESP32_IP}/update_lcd?message=Not%20In%20Class", timeout=0.5)
                 except: pass
                 return jsonify({"status": "not_in_class"})
@@ -559,8 +580,11 @@ def capture_attendance():
                 cls_name = class_row[0] if class_row[0] else ""
                 cls_section = class_row[1] if class_row[1] else ""
                 lcd_class = f"{cls_name} {cls_section}"
+            else:
+                lcd_class = "Unknown"
 
         status = compute_status(start_time, time.strftime("%Y-%m-%d %H:%M:%S"))
+        print("Computed status:", status)
         if status == "on_time":
             lcd_status = "On Time"
         elif status == "late":
@@ -571,12 +595,41 @@ def capture_attendance():
         try:
             msg = f"{urllib.parse.quote(lcd_name)}|{urllib.parse.quote(lcd_class)}|{urllib.parse.quote(lcd_status)}"
             requests.get(f"http://{ESP32_IP}/update_lcd?message={msg}", timeout=1)
-        except: pass
+            print("LCD updated with message:", msg)
+        except: 
+            print("Failed to update LCD")
+            pass
         return jsonify({"status": "match", "student_number": sn, "name": lcd_name, "attendance_status": status})
     else:
+        print("No match found, distance too high")
         try: requests.get(f"http://{ESP32_IP}/update_lcd?message=Unknown%20Face|Access%20Denied", timeout=0.5)
         except: pass
         return jsonify({"status": "unknown"})
+
+@app.route("/capture_global", methods=["GET"])
+def capture_global():
+    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
+    sn = request.args.get("student_number")
+    if not sn: return jsonify({"error": "Student number required"}), 400
+    print("Capture global face for student:", sn)
+    frame = get_latest_frame()
+    if frame is None: 
+        print("No frame available")
+        return jsonify({"error": "No frame"}), 500
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    encs = face_recognition.face_encodings(rgb)
+    print("Faces detected for global capture:", len(encs))
+    if len(encs) != 1: 
+        print("Invalid number of faces detected")
+        return jsonify({"error": "Exactly one face must be detected"}), 400
+    enc = encs[0]
+    with sqlite3.connect(DB) as c:
+        c.cursor().execute("UPDATE students SET encoding=? WHERE student_number=?", (enc.tobytes(), sn))
+        c.commit()
+        print("Encoding updated in database for:", sn)
+    cv2.imwrite(os.path.join(UPLOADS, f"{sn}.jpg"), frame)
+    print("Image saved for:", sn)
+    return jsonify({"status": "updated"})
 
 @app.route("/export_session")
 def export_session():
@@ -625,6 +678,20 @@ def export_course():
     out.headers["Content-Disposition"] = f"attachment; filename=summary_{name}.csv"
     out.headers["Content-type"] = "text/csv"
     return out
+
+@app.route("/get_student_statuses", methods=["GET"])
+def get_student_statuses_route():
+    if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
+    cid = request.args.get("class_id", type=int)
+    date = request.args.get("date")
+    if not cid or not date:
+        return jsonify({"error": "Missing parameters"}), 400
+    statuses = get_student_statuses(cid, date)
+    # Calculate counts
+    present = sum(1 for v in statuses.values() if v['status'] == 'on_time')
+    late = sum(1 for v in statuses.values() if v['status'] == 'late')
+    absent = sum(1 for v in statuses.values() if v['status'] == 'absent')
+    return jsonify({"statuses": statuses, "present": present, "late": late, "absent": absent})
 
 if __name__ == "__main__":
     init_db()

@@ -204,7 +204,7 @@
 
             <h2>Your Classes</h2>
             <select id="dayFilter" onchange="filterClassesByDay(this.value)">
-                <option value="">All Days</option><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option>
+                <option value="">All Days</option><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option>
             </select>
             <ul id="classesList">
                 {% for cls in all_classes %}
@@ -225,7 +225,7 @@
             {% if selected_class %}
                 <div class="calendar">
                     <h2>Calendar</h2>
-                    <input type="date" id="calendarDate" value="{{ selected_date or '' }}" onchange="validateAndLoadDate(this)">
+                    <input type="date" id="calendarDate" value="{{ selected_date or '' }}" onchange="loadClassesForDate(this.value)">
                 </div>
                 {% if selected_date %}
                     <div class="header-actions">
@@ -239,15 +239,15 @@
                     {% if error_msg %}
                         <p class="error-msg">{{ error_msg }}</p>
                     {% else %}
-                        <div class="stats-container">
+                        <div class="stats-container" id="statsContainer">
                             <span class="stat present">Present: {{ present }}</span>
                             <span class="stat late">Late: {{ late }}</span>
                             <span class="stat absent">Absent: {{ absent }}</span>
                         </div>
                         <img src="/stream" id="cam">
-                        <div class="students" style="margin-top: 10px;">
+                        <div class="students" style="margin-top: 10px;" id="studentsList">
                             {% for sid, info in students_statuses.items() %}
-                                <div class="student {{ info.status }}">
+                                <div class="student {{ info.status }}" data-sn="{{ sid }}">
                                     <span>{{ info.name }} ({{ sid }}) - {{ info.status | replace('_', ' ') | title }}</span>
                                     <div>
                                         {% if info.status == 'absent' %}
@@ -521,7 +521,14 @@
     async function submitUpdateFace() {
         const sn = document.getElementById('update_student_number').value;
         const res = await fetch(`/capture_global?student_number=${sn}`);
-        if (res.ok) { closeUpdateFaceModal(); alert("Face updated successfully!"); filterAllStudents(); } else { alert("Error updating face"); }
+        const json = await res.json();
+        if (res.ok && json.status === "updated") { 
+            closeUpdateFaceModal(); 
+            alert("Face updated successfully!"); 
+            filterAllStudents(); 
+        } else { 
+            alert("Error updating face: " + (json.error || "Unknown error")); 
+        }
     }
     async function submitUploadFace() {
         const sn = document.getElementById('update_student_number').value;
@@ -556,22 +563,77 @@
 
     // Attendance
     async function attendance(classId) {
-        const res = await fetch(`/capture_attendance?class_id=${classId}`);
-        const data = await res.json();
-        if (data.status === "match") {
-            location.reload();  // Reload to update the student list
+        try {
+            console.log("Running attendance check");
+            const res = await fetch(`/capture_attendance?class_id=${classId}`);
+            if (!res.ok) {
+                console.error("Fetch error:", res.status);
+                return;
+            }
+            const data = await res.json();
+            console.log("Attendance response:", data);
+            if (data.status === "match") {
+                console.log("Match found, updating UI...");
+                updateStudentStatus(data.student_number, data.attendance_status);
+                refreshRecentAttendance(classId);
+            }
+        } catch (error) {
+            console.error("Attendance fetch error:", error);
+        }
+    }
+
+    // NEW: Function to update a single student's status in the UI without full reload
+    function updateStudentStatus(sn, newStatus) {
+        const studentDiv = document.querySelector(`.student[data-sn="${sn}"]`);
+        if (studentDiv) {
+            const titleStatus = newStatus.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+            studentDiv.className = `student ${newStatus}`;
+            studentDiv.querySelector('span').innerHTML = studentDiv.querySelector('span').innerHTML.replace(/ - .*$/, ` - ${titleStatus}`);
+            const buttonsDiv = studentDiv.querySelector('div');
+            buttonsDiv.innerHTML = '';
+            if (newStatus === 'absent') {
+                buttonsDiv.innerHTML = '<button class="btn-green" onclick="showAuthModal(\'mark_present\', \'' + sn + '\', ' + '{{ selected_class.id }}' + ')">Mark Present</button>';
+            } else {
+                buttonsDiv.innerHTML = '<button class="btn-grey" onclick="showAuthModal(\'clear_attendance\', \'' + sn + '\', ' + '{{ selected_class.id }}' + ')">Clear Status</button>';
+            }
+            buttonsDiv.innerHTML += '<button class="btn-red" onclick="showAuthModal(\'remove_student\', \'' + sn + '\', ' + '{{ selected_class.id }}' + ')">Remove</button>';
+            // Update stats
+            updateStats();
+        }
+    }
+
+    // NEW: Function to recalculate and update stats
+    function updateStats() {
+        const students = document.querySelectorAll('.student');
+        let present = 0, late = 0, absent = 0;
+        students.forEach(s => {
+            if (s.classList.contains('on_time')) present++;
+            else if (s.classList.contains('late')) late++;
+            else if (s.classList.contains('absent')) absent++;
+        });
+        document.querySelector('.present').innerText = `Present: ${present}`;
+        document.querySelector('.late').innerText = `Late: ${late}`;
+        document.querySelector('.absent').innerText = `Absent: ${absent}`;
+    }
+
+    async function refreshRecentAttendance(classId) {
+        try {
+            const res = await fetch(`/attendance?class_id=${classId}`);
+            const data = await res.json();
+            const list = document.getElementById('list'); list.innerHTML="";
+            data.forEach(r => {
+                const li = document.createElement("li"); li.textContent = `${r[0] || 'Unknown'} - ${r[1]} (${r[2]})`; list.appendChild(li);
+            });
+        } catch (error) {
+            console.error("Refresh recent attendance error:", error);
         }
     }
     async function refresh(classId) {
         if(!classId) return;
-        const res = await fetch(`/attendance?class_id=${classId}`);
-        const data = await res.json();
-        const list = document.getElementById('list'); list.innerHTML="";
-        data.forEach(r => {
-            const li = document.createElement("li"); li.textContent = `${r[0] || 'Unknown'} - ${r[1]} (${r[2]})`; list.appendChild(li);
-        });
+        await refreshRecentAttendance(classId);
     }
     function filterClassesByDay(day) {
+        localStorage.setItem('selectedDay', day);
         const list = document.getElementById('classesList').getElementsByTagName('li');
         for(let li of list) li.style.display = (day === '' || li.dataset.day === day) ? 'flex' : 'none';
     }
@@ -603,7 +665,19 @@
 
     document.getElementById('calendarDate').oldValue = document.getElementById('calendarDate').value;
 
-    {% if selected_class %} setInterval(() => attendance({{ selected_class.id | tojson }}), 5000); setInterval(() => refresh({{ selected_class.id | tojson }}), 3000); {% endif %}
+    const dayFilter = document.getElementById('dayFilter');
+    const savedDay = localStorage.getItem('selectedDay');
+    if (savedDay) {
+        dayFilter.value = savedDay;
+        filterClassesByDay(savedDay);
+    }
+
+    var selectedDate = '{{ selected_date }}';
+    var today = '{{ today }}';
+    {% if selected_class %}
+    setInterval(() => refresh({{ selected_class.id | tojson }}), 3000); 
+    setInterval(() => attendance({{ selected_class.id | tojson }}), 5000);
+    {% endif %}
     </script>
 </body>
 </html>
