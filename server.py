@@ -14,7 +14,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
 # ================= CONFIGURATION =================
-ESP32_IP = "192.168.1.81" 
+ESP32_IP = "10.98.88.138" 
 ESP32_STREAM = f"http://{ESP32_IP}:81/stream"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -208,20 +208,14 @@ def log_attendance(cid, sn, status, specific_date=None):
         
     today = ts.split(" ")[0]
     
-    print(f"Attempting to log attendance for student {sn} in class {cid} on {today} with status {status}")
-    
     with sqlite3.connect(DB) as c:
         existing = c.cursor().execute("SELECT * FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{today}%")).fetchone()
         if existing:
-            print(f"Attendance already exists for {sn} in class {cid} on {today}: {existing}. Updating record.")
             c.cursor().execute("UPDATE attendance SET timestamp=?, status=? WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (ts, status, cid, sn, f"{today}%"))
             c.commit()
-            print("Update completed.")
         else:
-            print(f"No existing attendance. Inserting new record for {sn} in class {cid} on {today}: status={status}, timestamp={ts}")
             c.cursor().execute("INSERT INTO attendance (class_id, student_number, timestamp, status) VALUES (?, ?, ?, ?)", (cid, sn, ts, status))
             c.commit()
-            print("Insert completed.")
 
 def get_attendance_by_date(cid, target_date):
     if not target_date: target_date = datetime.now().strftime("%Y-%m-%d")
@@ -246,18 +240,26 @@ def compute_status(start, ts):
     t_dt = datetime.strptime(ts.split(" ")[1], "%H:%M:%S")
     return "on_time" if t_dt <= s_dt + timedelta(minutes=LATE_THRESHOLD) else "late"
 
-def count_past_classes(day_name, start_date_str, end_date_str):
+# --- HELPER: Generate all dates for a class ---
+def get_class_dates(day_name, start_date_str, end_date_str):
+    """Generates all dates for a class between start and end date (or today)."""
+    dates = []
     try:
-        start = datetime.strptime(start_date_str, "%Y-%m-%d")
-        end = datetime.strptime(end_date_str, "%Y-%m-%d")
-        today = datetime.now()
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        today = datetime.now().date()
         limit = min(end, today)
-        count = 0; curr = start; target_day_idx = time.strptime(day_name, "%A").tm_wday 
+        
+        target_weekday = time.strptime(day_name, "%A").tm_wday
+        
+        curr = start
         while curr <= limit:
-            if curr.weekday() == target_day_idx: count += 1
+            if curr.weekday() == target_weekday:
+                dates.append(curr.strftime("%Y-%m-%d"))
             curr += timedelta(days=1)
-        return count
-    except: return 0
+    except Exception as e:
+        print(f"Error generating dates: {e}")
+    return dates
 
 def find_nearest_class_date(day_name, start_date_str, end_date_str):
     try:
@@ -405,20 +407,15 @@ def remove_student_from_class_route():
 def manual_attendance_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    print("Received data for manual attendance:", d)
     if d.get("username") != session["username"] or not verify_professor_credentials(d.get("username"), d.get("password")):
         return jsonify({"error": "Invalid credentials"}), 401
     cid = d.get("class_id")
     sn = d.get("student_number")
     date = d.get("date") or datetime.now().strftime("%Y-%m-%d")
-    print("Student number received:", sn if sn else "None")
     if not cid or not sn or not date:
-        print(f"Missing parameters: cid={cid}, sn={sn}, date={date}")
         return jsonify({"error": "Missing parameters"}), 400
-    print(f"Manual attendance request for student {sn} in class {cid} on {date}")
     with sqlite3.connect(DB) as c:
         if not c.cursor().execute("SELECT * FROM class_students WHERE class_id=? AND student_number=?", (cid, sn)).fetchone():
-            print(f"Student {sn} not in class {cid}")
             return jsonify({"error": "Student not in class"}), 400
     today = datetime.now().strftime("%Y-%m-%d")
     if date == today:
@@ -428,14 +425,12 @@ def manual_attendance_route():
     else:
         status = "on_time"
     log_attendance(cid, sn, status, date)
-    print(f"Marked {status} for {sn} in {cid} on {date}")
     return jsonify({"status": "marked"})
 
 @app.route("/clear_attendance", methods=["POST"])
 def clear_attendance_route():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     d = request.json
-    print("Received data for clear attendance:", d)
     if d.get("username") != session["username"] or not verify_professor_credentials(d.get("username"), d.get("password")):
         return jsonify({"error": "Invalid credentials"}), 401
     cid = d.get("class_id")
@@ -443,11 +438,9 @@ def clear_attendance_route():
     date = d.get("date") or datetime.now().strftime("%Y-%m-%d")
     if not cid or not sn or not date:
         return jsonify({"error": "Missing parameters"}), 400
-    print(f"Clear attendance request for student {sn} in class {cid} on {date}")
     with sqlite3.connect(DB) as c:
-        deleted = c.cursor().execute("DELETE FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{date}%")).rowcount
+        c.cursor().execute("DELETE FROM attendance WHERE class_id=? AND student_number=? AND timestamp LIKE ?", (cid, sn, f"{date}%"))
         c.commit()
-        print(f"Deleted {deleted} records")
     return jsonify({"status": "cleared"})
 
 @app.route("/enroll_global", methods=["POST"])
@@ -526,43 +519,28 @@ def capture_attendance():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     cid = request.args.get("class_id", type=int)
     if not cid: return jsonify({"error": "Class ID required"}), 400
-    print("Capture attendance requested for class:", cid)
     frame = get_latest_frame()
-    if frame is None: 
-        print("No frame available")
-        return jsonify({"error": "No frame"}), 500
-
-    # NEW: Save frame for debug (remove after testing)
-    debug_path = os.path.join(BASE_DIR, "debug_frame.jpg")
-    cv2.imwrite(debug_path, frame)
-    print(f"Debug frame saved to: {debug_path}")
+    if frame is None: return jsonify({"error": "No frame"}), 500
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     encs = face_recognition.face_encodings(rgb)
-    print("Faces detected in frame:", len(encs))
     if not encs:
-        print("No face detected in the frame")
         try: requests.get(f"http://{ESP32_IP}/update_lcd?message=No%20Face%20Detected", timeout=0.5)
         except: pass
         return jsonify({"status": "no_face"})
 
     query = encs[0]
     ids, names, known_encs = get_all_encodings()
-    print("Known encodings loaded:", len(known_encs))
-    if not known_encs: 
-        print("No known faces in database")
-        return jsonify({"status": "no_known_faces"})
+    if not known_encs: return jsonify({"status": "no_known_faces"})
 
     dists = face_recognition.face_distance(known_encs, query)
     best_idx = int(np.argmin(dists))
     min_dist = dists[best_idx]
-    print("Best match distance:", min_dist)
+
     if min_dist < 0.65:
         sn = ids[best_idx]
-        print("Match found for student:", sn)
         with sqlite3.connect(DB) as c:
             if not c.cursor().execute("SELECT * FROM class_students WHERE class_id=? AND student_number=?", (cid, sn)).fetchone():
-                print("Student not enrolled in this class:", sn)
                 try: requests.get(f"http://{ESP32_IP}/update_lcd?message=Not%20In%20Class", timeout=0.5)
                 except: pass
                 return jsonify({"status": "not_in_class"})
@@ -584,7 +562,6 @@ def capture_attendance():
                 lcd_class = "Unknown"
 
         status = compute_status(start_time, time.strftime("%Y-%m-%d %H:%M:%S"))
-        print("Computed status:", status)
         if status == "on_time":
             lcd_status = "On Time"
         elif status == "late":
@@ -595,13 +572,9 @@ def capture_attendance():
         try:
             msg = f"{urllib.parse.quote(lcd_name)}|{urllib.parse.quote(lcd_class)}|{urllib.parse.quote(lcd_status)}"
             requests.get(f"http://{ESP32_IP}/update_lcd?message={msg}", timeout=1)
-            print("LCD updated with message:", msg)
-        except: 
-            print("Failed to update LCD")
-            pass
+        except: pass
         return jsonify({"status": "match", "student_number": sn, "name": lcd_name, "attendance_status": status})
     else:
-        print("No match found, distance too high")
         try: requests.get(f"http://{ESP32_IP}/update_lcd?message=Unknown%20Face|Access%20Denied", timeout=0.5)
         except: pass
         return jsonify({"status": "unknown"})
@@ -611,71 +584,237 @@ def capture_global():
     if "professor_id" not in session: return jsonify({"error": "Unauthorized"}), 403
     sn = request.args.get("student_number")
     if not sn: return jsonify({"error": "Student number required"}), 400
-    print("Capture global face for student:", sn)
     frame = get_latest_frame()
-    if frame is None: 
-        print("No frame available")
-        return jsonify({"error": "No frame"}), 500
+    if frame is None: return jsonify({"error": "No frame"}), 500
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     encs = face_recognition.face_encodings(rgb)
-    print("Faces detected for global capture:", len(encs))
-    if len(encs) != 1: 
-        print("Invalid number of faces detected")
-        return jsonify({"error": "Exactly one face must be detected"}), 400
+    if len(encs) != 1: return jsonify({"error": "Exactly one face must be detected"}), 400
     enc = encs[0]
     with sqlite3.connect(DB) as c:
         c.cursor().execute("UPDATE students SET encoding=? WHERE student_number=?", (enc.tobytes(), sn))
         c.commit()
-        print("Encoding updated in database for:", sn)
     cv2.imwrite(os.path.join(UPLOADS, f"{sn}.jpg"), frame)
-    print("Image saved for:", sn)
     return jsonify({"status": "updated"})
+
+# ================= NEW EXPORT FUNCTIONS =================
 
 @app.route("/export_session")
 def export_session():
     if "professor_id" not in session: return "Unauthorized", 403
-    cid, t_date = request.args.get("class_id"), request.args.get("date")
+    cid = request.args.get("class_id")
+    t_date = request.args.get("date")
+    
     si = StringIO()
     cw = csv.writer(si)
-    cw.writerow(["Student Number", "Last Name", "First Name", "Middle Name", "Status", "Time In", "Date"])
-    students = get_class_students_with_details(cid)
+    
     with sqlite3.connect(DB) as c:
-        raw_att = c.cursor().execute("SELECT student_number, status, timestamp FROM attendance WHERE class_id=? AND timestamp LIKE ?", (cid, f"{t_date}%")).fetchall()
-        att_details = {r[0]: {'status': r[1], 'time': r[2]} for r in raw_att}
-    for row in students:
-        sn, ln, fn, mn, _ = row
-        record = att_details.get(sn, {'status': 'ABSENT', 'time': '-'})
-        cw.writerow([sn, ln, fn, mn, record['status'].upper(), record['time'], t_date])
+        cls = c.cursor().execute("SELECT name, section, program, year FROM classes WHERE id=?", (cid,)).fetchone()
+        c_name = cls[0] if cls else "Unknown Class"
+        
+        cw.writerow([f"Class: {c_name}"])
+        cw.writerow([f"Date: {t_date}"])
+        cw.writerow([])
+        cw.writerow(["Student Number", "Last Name", "First Name", "Middle Name", "Status", "Time In"])
+        
+        students = get_class_students_with_details(cid)
+        # Fetch detailed time for this date
+        att_rows = c.cursor().execute("SELECT student_number, status, timestamp FROM attendance WHERE class_id=? AND timestamp LIKE ?", (cid, f"{t_date}%")).fetchall()
+        att_map = {r[0]: {'status': r[1], 'time': r[2].split(" ")[1]} for r in att_rows}
+        
+        for row in students:
+            sn, ln, fn, mn, _ = row
+            record = att_map.get(sn, {'status': 'ABSENT', 'time': '-'})
+            cw.writerow([sn, ln, fn, mn, record['status'].upper(), record['time']])
+            
     out = make_response(si.getvalue())
-    out.headers["Content-Disposition"] = f"attachment; filename=attendance_{t_date}.csv"
+    out.headers["Content-Disposition"] = f"attachment; filename=Attendance_{t_date}_{c_name}.csv"
     out.headers["Content-type"] = "text/csv"
     return out
 
 @app.route("/export_course")
 def export_course():
+    """Exports a matrix of all attendance data for a specific class (Dates vs Students)."""
     if "professor_id" not in session: return "Unauthorized", 403
     cid = request.args.get("class_id")
     si = StringIO()
     cw = csv.writer(si)
+    
     with sqlite3.connect(DB) as c:
-        info = c.cursor().execute("SELECT name, day, start_date, end_date FROM classes WHERE id=?", (cid,)).fetchone()
-        if not info: return "Incomplete Class Info", 400
-        name, day, sd, ed = info
-        total_possible = count_past_classes(day, sd, ed)
-        cw.writerow([f"Class: {name}"]); cw.writerow([f"Total Sessions: {total_possible}"]); cw.writerow([])
-        cw.writerow(["Student Number", "Name", "Present", "Late", "Absent", "Attendance %"])
+        # Get Class Info
+        cls = c.cursor().execute("SELECT name, day, start_date, end_date, start_time, end_time, section, program, year FROM classes WHERE id=?", (cid,)).fetchone()
+        if not cls: return "Class not found", 404
+        
+        c_name, c_day, c_start_date, c_end_date, c_start_time, c_end_time, c_sec, c_prog, c_yr = cls
+        
+        # Header Info
+        cw.writerow([f"Course: {c_name}"])
+        cw.writerow([f"Section: {c_yr} {c_prog} {c_sec}"])
+        cw.writerow([f"Schedule: {c_day} {c_start_time}-{c_end_time}"])
+        cw.writerow([])
+        
+        # Generate all class dates from start date until today
+        dates = get_class_dates(c_day, c_start_date, c_end_date)
+        
+        # Headers: Student Info + Dates + Summary
+        headers = ["Student No.", "Name"] + dates + ["Present", "Late", "Absent", "Rate (%)"]
+        cw.writerow(headers)
+        
+        # Get Students
         students = get_class_students_with_details(cid)
-        for row in students:
-            sn, ln, fn, mn, _ = row
-            full_name = f"{ln}, {fn} {mn}"
-            recs = c.cursor().execute("SELECT status FROM attendance WHERE class_id=? AND student_number=?", (cid, sn)).fetchall()
-            pres = sum(1 for r in recs if r[0].lower()=='on_time')
-            late = sum(1 for r in recs if r[0].lower()=='late')
-            absent = max(0, total_possible - (pres + late))
-            pct = ((pres+late)/total_possible*100) if total_possible>0 else 0
-            cw.writerow([sn, full_name, pres, late, absent, f"{pct:.1f}%"])
+        
+        # Get All Attendance for this class
+        att_rows = c.cursor().execute("SELECT student_number, timestamp, status FROM attendance WHERE class_id=?", (cid,)).fetchall()
+        
+        # Map: student_no -> date -> status
+        att_map = {}
+        for sn, ts, status in att_rows:
+            date_str = ts.split(" ")[0] # Extract YYYY-MM-DD
+            if sn not in att_map: att_map[sn] = {}
+            att_map[sn][date_str] = status
+            
+        # Build Rows
+        for stud in students:
+            sn, ln, fn, mn, _ = stud
+            mi = f" {mn[0]}." if mn and len(mn) > 0 else ""
+            full_name = f"{ln}, {fn}{mi}"
+            
+            row = [sn, full_name]
+            p_count, l_count, a_count = 0, 0, 0
+            
+            for d in dates:
+                status = att_map.get(sn, {}).get(d, None)
+                if status == 'on_time':
+                    row.append("P")
+                    p_count += 1
+                elif status == 'late':
+                    row.append("L")
+                    l_count += 1
+                else:
+                    # Absent if no record found for a past date
+                    row.append("A")
+                    a_count += 1
+            
+            total_days = len(dates)
+            rate = ((p_count + l_count) / total_days * 100) if total_days > 0 else 0.0
+            
+            row.append(p_count)
+            row.append(l_count)
+            row.append(a_count)
+            row.append(f"{rate:.2f}")
+            
+            cw.writerow(row)
+            
     out = make_response(si.getvalue())
-    out.headers["Content-Disposition"] = f"attachment; filename=summary_{name}.csv"
+    out.headers["Content-Disposition"] = f"attachment; filename=Summary_{c_name}_{datetime.now().strftime('%Y%m%d')}.csv"
+    out.headers["Content-type"] = "text/csv"
+    return out
+
+@app.route("/export_all_students")
+def export_all_students():
+    """Exports the master list of all students in the database."""
+    if "professor_id" not in session: return "Unauthorized", 403
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["Student Number", "Last Name", "First Name", "Middle Name", "Suffix", "Program", "Year", "Section", "Has Face Data"])
+    
+    with sqlite3.connect(DB) as c:
+        rows = c.cursor().execute("SELECT student_number, last_name, first_name, middle_name, suffix, program, year, section, (encoding IS NOT NULL) FROM students ORDER BY last_name, first_name").fetchall()
+        for r in rows:
+            cw.writerow([r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], "Yes" if r[8] else "No"])
+            
+    out = make_response(si.getvalue())
+    out.headers["Content-Disposition"] = f"attachment; filename=Master_Student_List_{datetime.now().strftime('%Y%m%d')}.csv"
+    out.headers["Content-type"] = "text/csv"
+    return out
+
+# ================= FIXED: EXPORT ALL ATTENDANCE MATRIX =================
+@app.route("/export_all_attendance")
+def export_all_attendance():
+    """
+    Exports ALL classes in a single CSV file using the Stacked Matrix format.
+    Format:
+    Class A Block (Headers, Dates, Students)
+    [Blank Rows]
+    Class B Block (Headers, Dates, Students)
+    """
+    if "professor_id" not in session: return "Unauthorized", 403
+    si = StringIO()
+    cw = csv.writer(si)
+
+    pid = session["professor_id"]
+    
+    with sqlite3.connect(DB) as c:
+        # Get all classes for the professor
+        classes = c.cursor().execute("SELECT id, name, day, start_date, end_date, start_time, end_time, section, program, year FROM classes WHERE professor_id=?", (pid,)).fetchall()
+        
+        for cls in classes:
+            cid, c_name, c_day, c_start_date, c_end_date, c_start_time, c_end_time, c_sec, c_prog, c_yr = cls
+            
+            # --- BLOCK HEADER ---
+            cw.writerow([f"Course: {c_name}"])
+            cw.writerow([f"Section: {c_yr} {c_prog} {c_sec}"])
+            cw.writerow([f"Schedule: {c_day} {c_start_time}-{c_end_time}"])
+            cw.writerow([]) # Empty row for spacing
+            
+            # --- CALCULATE COLUMNS (DATES) ---
+            dates = get_class_dates(c_day, c_start_date, c_end_date)
+            
+            # --- TABLE HEADER ---
+            # Columns: Student No | Name | [Date 1] | [Date 2] | ... | Present | Late | Absent | Rate (%)
+            headers = ["Student No.", "Name"] + dates + ["Present", "Late", "Absent", "Rate (%)"]
+            cw.writerow(headers)
+            
+            # --- FETCH DATA ---
+            students = get_class_students_with_details(cid)
+            att_rows = c.cursor().execute("SELECT student_number, timestamp, status FROM attendance WHERE class_id=?", (cid,)).fetchall()
+            
+            # Map: student_no -> date -> status
+            att_map = {}
+            for sn, ts, status in att_rows:
+                date_str = ts.split(" ")[0] # Extract YYYY-MM-DD
+                if sn not in att_map: att_map[sn] = {}
+                att_map[sn][date_str] = status
+            
+            # --- BUILD STUDENT ROWS ---
+            for stud in students:
+                sn, ln, fn, mn, _ = stud
+                mi = f" {mn[0]}." if mn and len(mn) > 0 else ""
+                full_name = f"{ln}, {fn}{mi}"
+                
+                row = [sn, full_name]
+                p_count, l_count, a_count = 0, 0, 0
+                
+                # Loop through every valid class date for this semester
+                for d in dates:
+                    status = att_map.get(sn, {}).get(d, None)
+                    if status == 'on_time':
+                        row.append("P")
+                        p_count += 1
+                    elif status == 'late':
+                        row.append("L")
+                        l_count += 1
+                    else:
+                        row.append("A")
+                        a_count += 1
+                
+                total_days = len(dates)
+                rate = ((p_count + l_count) / total_days * 100) if total_days > 0 else 0.0
+                
+                # Add Summary Columns
+                row.append(p_count)
+                row.append(l_count)
+                row.append(a_count)
+                row.append(f"{rate:.2f}")
+                
+                cw.writerow(row)
+            
+            # --- SEPARATOR BETWEEN CLASSES ---
+            cw.writerow([])
+            cw.writerow([])
+            cw.writerow([])
+
+    out = make_response(si.getvalue())
+    out.headers["Content-Disposition"] = f"attachment; filename=All_Attendance_Matrix_{datetime.now().strftime('%Y%m%d')}.csv"
     out.headers["Content-type"] = "text/csv"
     return out
 
@@ -687,7 +826,6 @@ def get_student_statuses_route():
     if not cid or not date:
         return jsonify({"error": "Missing parameters"}), 400
     statuses = get_student_statuses(cid, date)
-    # Calculate counts
     present = sum(1 for v in statuses.values() if v['status'] == 'on_time')
     late = sum(1 for v in statuses.values() if v['status'] == 'late')
     absent = sum(1 for v in statuses.values() if v['status'] == 'absent')
